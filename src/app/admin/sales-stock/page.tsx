@@ -183,24 +183,26 @@ export default function AdminSalesStockPage() {
   useEffect(() => { fetchRecords(); }, [selectedDate, selectedBranch]);
 
   const fetchStockCounts = async (shiftId: string) => {
-    if (stockCounts[shiftId]) return;
+    if (stockCounts[shiftId] !== undefined) return;
     try {
       const { data, error } = await supabase
         .from('stock_counts')
-        .select('*, products:product_id(product_name, product_price)')
+        .select('*, products:product_id(product_name, base_price)')
         .eq('shift_id', shiftId);
       if (error) throw error;
 
       const counts: StockCount[] = (data || []).map((item: any) => ({
         ...item,
         product_name: item.products?.product_name || 'Unknown Product',
-        product_price: item.products?.product_price || 0,
+        product_price: item.products?.base_price ?? 0,
         transfer: item.transfer || 0,
         sales_qty: item.sales_qty || 0,
       }));
       setStockCounts(prev => ({ ...prev, [shiftId]: counts }));
     } catch (error) {
       console.error('Error fetching stock counts:', error);
+      // Set empty array so the spinner stops — don't leave shiftId undefined
+      setStockCounts(prev => ({ ...prev, [shiftId]: [] }));
     }
   };
 
@@ -425,7 +427,7 @@ export default function AdminSalesStockPage() {
                           {/* Stock Counts */}
                           <div>
                             <h4 className="font-medium mb-2">Stock Counts</h4>
-                            {stockCounts[record.id] ? (
+                            {stockCounts[record.id] !== undefined ? (
                               stockCounts[record.id].length > 0 ? (
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-sm">
