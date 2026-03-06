@@ -141,22 +141,25 @@ export default function CashierSalesPage() {
         closing_stock: '',
       })));
 
-      // Fetch last shift cash (balance brought down)
+      // Fetch last shift cash (balance brought down) — non-fatal if RPC missing
       const { data: lastCash, error: lastCashError } = await supabase
         .rpc('get_last_shift_cash', { target_branch_id: profile?.branch_id });
-      if (lastCashError) throw lastCashError;
+      if (lastCashError) {
+        console.warn('get_last_shift_cash error (using 0):', lastCashError.message);
+      }
       setBalanceBroughtDown(lastCash || 0);
 
-      // Fetch active shift to get shift start time and ID
-      const { data: activeShift } = await supabase
-        .from('shifts')
-        .select('id, started_at')
-        .eq('branch_id', profile?.branch_id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (activeShift) {
-        setActiveShiftId(activeShift.id);
+      // Fetch active shift ID — non-fatal if missing
+      try {
+        const { data: activeShift } = await supabase
+          .from('shifts')
+          .select('id')
+          .eq('branch_id', profile?.branch_id)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (activeShift) setActiveShiftId(activeShift.id);
+      } catch (shiftErr) {
+        console.warn('Could not fetch active shift ID:', shiftErr);
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);
@@ -320,7 +323,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
 
   const inputCls = 'w-full px-1.5 py-1 border rounded text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
 
-  if (loading || shiftLoading) {
+  if (loading) {
     return (
       <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" hasActiveShift={hasActiveShift} onEndShiftAndLogout={handleEndShiftAndLogout}>
         <div className="h-full flex flex-col">
