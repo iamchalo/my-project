@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Notification, useNotification } from '@/components/ui/notification';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Loader2, LogIn } from 'lucide-react';
+import { Loader2, LogIn, Mail, X } from 'lucide-react';
 
 // Device detection helper function
 function isMobileDevice(): boolean {
@@ -40,6 +40,43 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Forgot password modal state
+  const [showForgotModal,   setShowForgotModal]   = useState(false);
+  const [modalEmail,        setModalEmail]        = useState('');
+  const [resetSending,      setResetSending]      = useState(false);
+  const [resetSent,         setResetSent]         = useState(false);
+  const [resetError,        setResetError]        = useState('');
+
+  // Open forgot-password modal, pre-filling email from the login field
+  const openForgotModal = () => {
+    setModalEmail(email.trim());
+    setResetSent(false);
+    setResetError('');
+    setShowForgotModal(true);
+  };
+
+  const handleSendResetLink = async () => {
+    const target = modalEmail.trim();
+    if (!target) { setResetError('Please enter your email address.'); return; }
+
+    setResetSending(true);
+    setResetError('');
+    try {
+      const res  = await fetch('/api/auth/request-reset', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: target }),
+      });
+      const data = await res.json();
+      if (!res.ok && data.error) { setResetError(data.error); return; }
+      setResetSent(true);
+    } catch {
+      setResetError('Network error. Please try again.');
+    } finally {
+      setResetSending(false);
+    }
+  };
 
   // Redirect if already logged in
   useEffect(() => {
@@ -183,6 +220,7 @@ export default function LoginPage() {
   ];
 
   return (
+    <>
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
       {notification && (
         <Notification
@@ -238,6 +276,17 @@ export default function LoginPage() {
                 autoComplete="current-password"
                 required
               />
+            </div>
+
+            {/* Forgot password link */}
+            <div className="flex justify-end -mt-1">
+              <button
+                type="button"
+                onClick={openForgotModal}
+                className="text-xs text-primary hover:underline"
+              >
+                Forgot Password?
+              </button>
             </div>
 
             <Button
@@ -300,5 +349,86 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+
+      {/* ── Forgot Password Modal ────────────────────────────────────────── */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background rounded-xl shadow-xl w-full max-w-sm p-6 relative">
+
+            {/* Close button */}
+            <button
+              onClick={() => setShowForgotModal(false)}
+              className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {resetSent ? (
+              /* ── Success state ── */
+              <div className="text-center space-y-3 py-2">
+                <div className="mx-auto h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <Mail className="h-6 w-6 text-green-600" />
+                </div>
+                <h2 className="text-lg font-semibold">Check your email</h2>
+                <p className="text-sm text-muted-foreground">
+                  If <strong>{modalEmail}</strong> is registered, a reset link has been sent.
+                  The link expires in <strong>15 minutes</strong>.
+                </p>
+                <Button className="w-full mt-2" onClick={() => setShowForgotModal(false)}>
+                  Done
+                </Button>
+              </div>
+            ) : (
+              /* ── Request state ── */
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-lg font-semibold">Forgot your password?</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    We'll send a secure reset link to your registered email address.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium block mb-1.5">Email Address</label>
+                  <input
+                    type="email"
+                    value={modalEmail}
+                    onChange={e => { setModalEmail(e.target.value); setResetError(''); }}
+                    placeholder="you@example.com"
+                    disabled={resetSending}
+                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                    autoFocus
+                  />
+                </div>
+
+                {resetError && (
+                  <p className="text-sm text-destructive">{resetError}</p>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShowForgotModal(false)}
+                    disabled={resetSending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 gap-2"
+                    onClick={handleSendResetLink}
+                    disabled={resetSending}
+                  >
+                    {resetSending && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {resetSending ? 'Sending…' : 'Send Reset Link'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
