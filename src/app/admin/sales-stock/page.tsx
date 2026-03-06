@@ -448,7 +448,8 @@ export default function AdminSalesStockPage() {
                                     <tbody>
                                       {stockCounts[record.id].map(stock => {
                                         const totals = stock.opening_stock + stock.additions - stock.transfer - stock.spoilt;
-                                        const variance = totals - stock.closing_stock - stock.sales_qty;
+                                        const difference = totals - stock.closing_stock - stock.sales_qty;
+                                        const variance = difference * -1;
                                         const stockAmount = variance * stock.product_price;
                                         return (
                                           <tr key={stock.id} className="border-b hover:bg-muted/20">
@@ -460,7 +461,7 @@ export default function AdminSalesStockPage() {
                                             <td className="text-center py-2 px-2 bg-muted/20 font-medium">{totals}</td>
                                             <td className="text-center py-2 px-2 text-blue-600">{stock.sales_qty}</td>
                                             <td className="text-center py-2 px-2">{stock.closing_stock}</td>
-                                            <td className={`text-center py-2 px-2 bg-muted/20 font-medium ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-orange-600' : ''}`}>
+                                            <td className={`text-center py-2 px-2 bg-muted/20 font-medium ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-green-600' : ''}`}>
                                               {variance}
                                             </td>
                                             <td className={`text-right py-2 px-2 bg-muted/20 font-medium ${stockAmount < 0 ? 'text-red-600' : stockAmount > 0 ? 'text-orange-600' : ''}`}>
