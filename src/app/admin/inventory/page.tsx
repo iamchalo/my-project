@@ -67,6 +67,7 @@ export default function AdminInventoryPage() {
   const supabase = createClient();
 
   const [loading, setLoading]     = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [saving, setSaving]       = useState(false);
   const [items, setItems]         = useState<InventoryItem[]>([]);
   const [branches, setBranches]   = useState<Branch[]>([]);
@@ -110,6 +111,7 @@ export default function AdminInventoryPage() {
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
+    setFetchError(null);
     try {
       const { data, error } = await supabase
         .from('branch_inventory')
@@ -117,18 +119,21 @@ export default function AdminInventoryPage() {
         .eq('is_active', true)
         .order('item_name');
 
+      console.log('[inventory] fetch result:', { data, error });
+
       if (error) throw error;
 
       setItems((data || []).map((r: any) => ({
         ...r,
         branch_name: r.branches?.name || '—',
       })));
-    } catch {
-      showNotif('error', 'Failed to load inventory');
+    } catch (err: any) {
+      console.error('[inventory] fetch failed:', err);
+      setFetchError(err?.message || 'Failed to load inventory. The branch_inventory table may not exist — run the migration in Supabase.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
 
@@ -461,10 +466,22 @@ export default function AdminInventoryPage() {
           {/* Table grouped by branch */}
           {loading ? (
             <div className="flex justify-center py-16"><Loader2Icon className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : fetchError ? (
+            <Card className="border-destructive/50">
+              <CardContent className="py-12 text-center space-y-3">
+                <p className="text-destructive font-semibold">Failed to load inventory data</p>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">{fetchError}</p>
+                <Button variant="outline" size="sm" onClick={fetchItems} className="mt-2">
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
           ) : filtered.length === 0 ? (
             <Card>
               <CardContent className="py-16 text-center text-muted-foreground">
-                No inventory items found. Click "Add Item" to get started.
+                {items.length === 0
+                  ? 'No inventory items yet. Click "Add Item" to get started.'
+                  : 'No items match the current filters.'}
               </CardContent>
             </Card>
           ) : (
