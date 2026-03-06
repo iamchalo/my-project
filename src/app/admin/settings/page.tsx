@@ -136,7 +136,7 @@ export default function AdminSettingsPage() {
                   <label className="text-sm font-medium mb-2 block">Role</label>
                   <input
                     type="text"
-                    value={profile?.role?.charAt(0).toUpperCase() + profile?.role?.slice(1) || ''}
+                    value={profile?.role ? profile.role.charAt(0).toUpperCase() + profile.role.slice(1) : ''}
                     disabled
                     className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 cursor-not-allowed capitalize"
                   />
