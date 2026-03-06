@@ -15,6 +15,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
+import { AdminDashboardSkeleton } from '@/components/admin/admin-dashboard-skeleton';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -233,6 +234,14 @@ export default function AdminDashboard() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  if (loading) {
+    return (
+      <DashboardLayout userName={profile?.full_name || 'Admin'} userRole={userRole}>
+        <AdminDashboardSkeleton />
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout userName={profile?.full_name || 'Admin'} userRole={userRole}>
       <div className="p-4 md:p-8">
@@ -332,10 +341,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               {chartLoading ? (
-                <div className="h-80 flex items-center justify-center text-muted-foreground">
-                  <RefreshCwIcon className="h-6 w-6 animate-spin mr-2" />
-                  Loading chart...
-                </div>
+                <div className="relative h-80 w-full overflow-hidden rounded-md bg-muted/50 animate-pulse" />
               ) : chartData.length === 0 || branches.length === 0 ? (
                 <div className="h-80 flex items-center justify-center text-muted-foreground">
                   No sales data for this period
