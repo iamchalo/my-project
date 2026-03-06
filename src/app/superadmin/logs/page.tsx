@@ -3,204 +3,84 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DataTable } from '@/components/dashboard/data-table';
-import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
-import { ActivityIcon, ShieldIcon, AlertTriangleIcon, Loader2 } from 'lucide-react';
+import { ActivityIcon, LogInIcon, LogOutIcon, UsersIcon, Loader2 } from 'lucide-react';
 
-interface ActivityLog {
+interface AuthLog {
   id: string;
-  type: string;
-  user: string;
-  action: string;
-  timestamp: string;
-  severity: 'info' | 'warning' | 'error';
-  branch?: string;
+  user_id: string;
+  user_name: string;
+  role: string;
+  branch: string | null;
+  action: 'login' | 'logout';
+  created_at: string;
 }
 
 export default function SuperadminLogsPage() {
   const { profile } = useAuth();
   const supabase = createClient();
 
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [selectedType, setSelectedType] = useState<string>('all');
-  const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
-  const [selectedDate, setSelectedDate] = useState<string>(getKenyaDateString());
+  const [loading, setLoading]           = useState(true);
+  const [logs, setLogs]                 = useState<AuthLog[]>([]);
+  const [selectedDate, setSelectedDate] = useState(getKenyaDateString());
+  const [selectedAction, setSelectedAction] = useState<string>('all');
+  const [selectedRole, setSelectedRole]     = useState<string>('all');
 
-  // Stats
-  const [totalLogs, setTotalLogs] = useState(0);
-  const [warningCount, setWarningCount] = useState(0);
-  const [errorCount, setErrorCount] = useState(0);
-
-  useEffect(() => {
-    fetchLogs();
-  }, [selectedDate]);
+  useEffect(() => { fetchLogs(); }, [selectedDate]);
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
-      const activityLogs: ActivityLog[] = [];
 
-      // Fetch orders as activity (completed today)
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select(`
-          order_number,
-          created_at,
-          total_amount,
-          status,
-          profiles:cashier_id (full_name),
-          branches:branch_id (name)
-        `)
+      const { data, error } = await supabase
+        .from('auth_logs')
+        .select('*')
+        // Superadmins must not see other superadmins' activity
+        .neq('role', 'superadmin')
         .gte('created_at', `${selectedDate}T00:00:00`)
         .lte('created_at', `${selectedDate}T23:59:59`)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
-      ordersData?.forEach((order: any) => {
-        activityLogs.push({
-          id: `ORDER-${order.order_number}`,
-          type: 'order',
-          user: order.profiles?.full_name || 'Unknown',
-          action: `Created order #${order.order_number} - Ksh ${Number(order.total_amount).toFixed(2)} (${order.status})`,
-          timestamp: order.created_at,
-          severity: 'info',
-          branch: order.branches?.name,
-        });
-      });
-
-      // Fetch expenses as activity
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select(`
-          expense_number,
-          created_at,
-          total,
-          description,
-          profiles:cashier_id (full_name),
-          branches:branch_id (name)
-        `)
-        .eq('expense_date', selectedDate)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      expensesData?.forEach((expense: any) => {
-        activityLogs.push({
-          id: `EXPENSE-${expense.expense_number}`,
-          type: 'expense',
-          user: expense.profiles?.full_name || 'Unknown',
-          action: `Recorded expense - ${expense.description} (Ksh ${Number(expense.total).toFixed(2)})`,
-          timestamp: expense.created_at,
-          severity: 'warning',
-          branch: expense.branches?.name,
-        });
-      });
-
-      // Fetch stock updates (recent updates to branch_products)
-      const { data: stockUpdates } = await supabase
-        .from('branch_products')
-        .select(`
-          product_id,
-          stock_quantity,
-          updated_at,
-          products:product_id (product_name),
-          branches:branch_id (name)
-        `)
-        .gte('updated_at', `${selectedDate}T00:00:00`)
-        .lte('updated_at', `${selectedDate}T23:59:59`)
-        .order('updated_at', { ascending: false })
-        .limit(30);
-
-      stockUpdates?.forEach((stock: any) => {
-        activityLogs.push({
-          id: `STOCK-${stock.product_id}-${new Date(stock.updated_at).getTime()}`,
-          type: 'stock',
-          user: 'System',
-          action: `Stock updated for ${stock.products?.product_name} - Quantity: ${stock.stock_quantity}`,
-          timestamp: stock.updated_at,
-          severity: stock.stock_quantity < 10 ? 'warning' : 'info',
-          branch: stock.branches?.name,
-        });
-      });
-
-      // Sort all logs by timestamp
-      activityLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      setLogs(activityLogs);
-      setTotalLogs(activityLogs.length);
-      setWarningCount(activityLogs.filter(log => log.severity === 'warning').length);
-      setErrorCount(activityLogs.filter(log => log.severity === 'error').length);
-
+      if (error) throw error;
+      setLogs(data || []);
     } catch (error) {
-      console.error('Error fetching logs:', error);
+      console.error('Error fetching auth logs:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter logs
+  // Client-side filters (action + role applied after fetch)
   const filteredLogs = logs.filter(log => {
-    if (selectedType !== 'all' && log.type !== selectedType) return false;
-    if (selectedSeverity !== 'all' && log.severity !== selectedSeverity) return false;
+    if (selectedAction !== 'all' && log.action !== selectedAction) return false;
+    if (selectedRole   !== 'all' && log.role   !== selectedRole)   return false;
     return true;
   });
 
-  const logColumns = [
-    { key: 'id', label: 'ID' },
-    {
-      key: 'type',
-      label: 'Type',
-      render: (value: string) => {
-        const typeColors: Record<string, string> = {
-          order: 'bg-blue-100 text-blue-800',
-          expense: 'bg-yellow-100 text-yellow-800',
-          stock: 'bg-green-100 text-green-800',
-          security: 'bg-red-100 text-red-800',
-        };
-        return (
-          <span className={`px-2 py-1 rounded text-xs font-medium ${typeColors[value] || 'bg-gray-100 text-gray-800'}`}>
-            {value.toUpperCase()}
-          </span>
-        );
-      },
-    },
-    { key: 'user', label: 'User' },
-    { key: 'action', label: 'Action' },
-    {
-      key: 'branch',
-      label: 'Branch',
-      render: (value: string) => value || 'N/A',
-    },
-    {
-      key: 'timestamp',
-      label: 'Timestamp',
-      render: (value: string) => new Date(value).toLocaleString('en-KE', {
-        dateStyle: 'short',
-        timeStyle: 'medium'
-      }),
-    },
-    {
-      key: 'severity',
-      label: 'Severity',
-      render: (value: string) => {
-        const colors: Record<string, 'default' | 'secondary' | 'destructive'> = {
-          info: 'secondary',
-          warning: 'default',
-          error: 'destructive',
-        };
-        return <Badge variant={colors[value]}>{value.toUpperCase()}</Badge>;
-      },
-    },
-  ];
+  const loginCount    = filteredLogs.filter(l => l.action === 'login').length;
+  const logoutCount   = filteredLogs.filter(l => l.action === 'logout').length;
+  const uniqueUsers   = new Set(filteredLogs.map(l => l.user_id)).size;
+
+  const fmtTime = (ts: string) =>
+    new Date(ts).toLocaleString('en-KE', {
+      timeZone: 'Africa/Nairobi',
+      dateStyle: 'short',
+      timeStyle: 'medium',
+    });
+
+  const roleColors: Record<string, string> = {
+    cashier:  'bg-blue-100   text-blue-800   dark:bg-blue-900/30   dark:text-blue-300',
+    manager:  'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    admin:    'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  };
 
   if (loading) {
     return (
       <DashboardLayout userName={profile?.full_name || 'Superadmin'} userRole="superadmin">
         <div className="flex items-center justify-center h-full">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </DashboardLayout>
     );
@@ -210,52 +90,45 @@ export default function SuperadminLogsPage() {
     <DashboardLayout userName={profile?.full_name || 'Superadmin'} userRole="superadmin">
       <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-8">
+
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">System Logs</h1>
-            <p className="text-muted-foreground">
-              System and user activity logs
-            </p>
+            <p className="text-muted-foreground">User authentication activity across all branches</p>
           </div>
 
           {/* Stats */}
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-100 rounded-lg">
-                    <ActivityIcon className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Logs</p>
-                    <p className="text-2xl font-bold">{totalLogs}</p>
-                  </div>
+              <CardContent className="p-6 flex items-center gap-4">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                  <ActivityIcon className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Events</p>
+                  <p className="text-2xl font-bold">{filteredLogs.length}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-yellow-100 rounded-lg">
-                    <AlertTriangleIcon className="h-6 w-6 text-yellow-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Warnings</p>
-                    <p className="text-2xl font-bold">{warningCount}</p>
-                  </div>
+              <CardContent className="p-6 flex items-center gap-4">
+                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                  <LogInIcon className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Logins</p>
+                  <p className="text-2xl font-bold">{loginCount}</p>
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-red-100 rounded-lg">
-                    <ShieldIcon className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Errors</p>
-                    <p className="text-2xl font-bold">{errorCount}</p>
-                  </div>
+              <CardContent className="p-6 flex items-center gap-4">
+                <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                  <UsersIcon className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Unique Users</p>
+                  <p className="text-2xl font-bold">{uniqueUsers}</p>
                 </div>
               </CardContent>
             </Card>
@@ -263,45 +136,42 @@ export default function SuperadminLogsPage() {
 
           {/* Filters */}
           <Card>
-            <CardHeader>
-              <CardTitle>Filter Logs</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Filter Logs</CardTitle></CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Type</label>
-                  <select
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                    value={selectedType}
-                    onChange={(e) => setSelectedType(e.target.value)}
-                  >
-                    <option value="all">All Types</option>
-                    <option value="order">Orders</option>
-                    <option value="expense">Expenses</option>
-                    <option value="stock">Stock Updates</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Severity</label>
-                  <select
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                    value={selectedSeverity}
-                    onChange={(e) => setSelectedSeverity(e.target.value)}
-                  >
-                    <option value="all">All Severity</option>
-                    <option value="info">Info</option>
-                    <option value="warning">Warning</option>
-                    <option value="error">Error</option>
-                  </select>
-                </div>
                 <div>
                   <label className="text-sm font-medium mb-2 block">Date</label>
                   <input
                     type="date"
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
+                    onChange={e => { setSelectedDate(e.target.value); }}
+                    className="w-full px-4 py-2 border rounded-lg bg-background"
                   />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Action</label>
+                  <select
+                    value={selectedAction}
+                    onChange={e => setSelectedAction(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg bg-background"
+                  >
+                    <option value="all">All Actions</option>
+                    <option value="login">Login</option>
+                    <option value="logout">Logout</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Role</label>
+                  <select
+                    value={selectedRole}
+                    onChange={e => setSelectedRole(e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg bg-background"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="cashier">Cashier</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
               </div>
             </CardContent>
@@ -310,17 +180,62 @@ export default function SuperadminLogsPage() {
           {/* Logs Table */}
           {filteredLogs.length === 0 ? (
             <Card>
-              <CardContent className="p-12 text-center text-muted-foreground">
-                No activity logs found for this date.
+              <CardContent className="py-12 text-center text-muted-foreground">
+                No authentication logs found for this date.
               </CardContent>
             </Card>
           ) : (
-            <DataTable
-              title="Activity Logs"
-              columns={logColumns}
-              data={filteredLogs}
-            />
+            <Card>
+              <CardHeader>
+                <CardTitle>Authentication Events ({filteredLogs.length})</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30">
+                        <th className="text-left px-4 py-3 font-medium">User</th>
+                        <th className="text-left px-4 py-3 font-medium">Role</th>
+                        <th className="text-left px-4 py-3 font-medium">Branch</th>
+                        <th className="text-left px-4 py-3 font-medium">Action</th>
+                        <th className="text-left px-4 py-3 font-medium">Date & Time</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredLogs.map(log => (
+                        <tr key={log.id} className="border-b hover:bg-muted/20 transition-colors">
+                          <td className="px-4 py-3 font-medium">{log.user_name}</td>
+                          <td className="px-4 py-3">
+                            <span className={`px-2 py-1 rounded text-xs font-medium capitalize ${roleColors[log.role] || 'bg-gray-100 text-gray-800'}`}>
+                              {log.role}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {log.branch || '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            {log.action === 'login' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                <LogInIcon className="h-3 w-3" />
+                                Login
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                <LogOutIcon className="h-3 w-3" />
+                                Logout
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{fmtTime(log.created_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           )}
+
         </div>
       </div>
     </DashboardLayout>

@@ -35,6 +35,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [skipNextFetch, setSkipNextFetch] = useState(false);
   const supabase = createClient();
 
+  // Write a login/logout entry to auth_logs (non-fatal — errors are swallowed)
+  const writeAuthLog = async (
+    userId: string,
+    userName: string,
+    role: string,
+    branchId: string | null,
+    action: 'login' | 'logout',
+  ) => {
+    try {
+      let branch: string | null = null;
+      if (branchId) {
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('name')
+          .eq('id', branchId)
+          .maybeSingle();
+        branch = branchData?.name ?? null;
+      }
+      await supabase.from('auth_logs').insert({ user_id: userId, user_name: userName, role, branch, action });
+    } catch (err) {
+      console.warn('[auth_logs] Failed to write log:', err);
+    }
+  };
+
   // Fetch user profile from database
   const fetchProfile = async (userId: string) => {
     try {
@@ -144,6 +168,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('Profile loaded in signIn:', profileData?.role, profileData?.full_name);
           // Skip next auth state change fetch since we just fetched the profile
           setSkipNextFetch(true);
+          // Log the login event
+          await writeAuthLog(data.user.id, profileData.full_name, profileData.role, profileData.branch_id, 'login');
         }
       }
 
@@ -160,6 +186,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true);
+      // Log before signing out (session is still valid at this point)
+      if (user && profile) {
+        await writeAuthLog(user.id, profile.full_name, profile.role, profile.branch_id, 'logout');
+      }
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);

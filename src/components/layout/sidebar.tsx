@@ -14,7 +14,6 @@ import {
   BoxIcon,
   RefreshCwIcon,
   UsersIcon,
-  BarChartIcon,
   ActivityIcon,
   ShieldIcon,
 } from 'lucide-react';
@@ -65,7 +64,6 @@ const navigationConfig: Record<UserRole, NavItem[]> = {
     { label: 'Expenses', href: '/superadmin/expenses', icon: DollarSignIcon },
     { label: 'Transfers', href: '/superadmin/transfers', icon: RefreshCwIcon },
     { label: 'Sales & Stock', href: '/superadmin/sales-stock', icon: TrendingUpIcon },
-    { label: 'Analytics', href: '/superadmin/analytics', icon: BarChartIcon },
     { label: 'Employees', href: '/superadmin/employees', icon: UsersIcon },
     { label: 'Logs', href: '/superadmin/logs', icon: ActivityIcon },
     { label: 'Inventory', href: '/superadmin/inventory', icon: PackageIcon },
