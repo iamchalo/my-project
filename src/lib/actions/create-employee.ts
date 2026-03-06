@@ -6,7 +6,7 @@ interface CreateEmployeeData {
   email: string;
   password: string;
   full_name: string;
-  role: 'cashier' | 'manager' | 'admin';
+  role: 'cashier' | 'manager' | 'admin' | 'superadmin';
   branch_id: string | null;
   phone?: string;
 }

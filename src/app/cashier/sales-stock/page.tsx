@@ -307,6 +307,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
       product_id: p.id,
       opening_stock: '',
       additions: '',
+      transfer: '',
       spoilt: '',
       closing_stock: '',
     })));
