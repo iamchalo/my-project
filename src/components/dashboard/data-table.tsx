@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 interface Column {
   key: string;
   label: string;
-  render?: (value: any, row: any, index?: number) => React.ReactNode;
+  render?: (value: any, row: any, index: number) => React.ReactNode;
 }
 
 interface DataTableProps {
