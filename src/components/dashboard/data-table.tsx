@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 interface Column {
   key: string;
   label: string;
-  render?: (value: any, row: any) => React.ReactNode;
+  render?: (value: any, row: any, index?: number) => React.ReactNode;
 }
 
 interface DataTableProps {
@@ -59,7 +59,7 @@ export function DataTable({
                     {columns.map((column) => (
                       <TableCell key={column.key}>
                         {column.render
-                          ? column.render(row[column.key], row)
+                          ? column.render(row[column.key], row, rowIndex)
                           : row[column.key]}
                       </TableCell>
                     ))}

@@ -200,7 +200,11 @@ export default function AdminExpensesPage() {
   }, [selectedDate, selectedBranch, selectedShift, selectedCategory]);
 
   const expenseColumns = [
-    { key: 'expense_number', label: '#' },
+    {
+      key: 'index',
+      label: '#',
+      render: (_: any, __: any, index: number) => index + 1,
+    },
     { key: 'branch_name', label: 'Branch' },
     { key: 'cashier_name', label: 'Cashier' },
     {
