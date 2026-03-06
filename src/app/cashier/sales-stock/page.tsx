@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +45,7 @@ export default function CashierSalesPage() {
   const { hasActiveShift, loading: shiftLoading } = useShift();
 
   const [loading, setLoading] = useState(true);
+  const initialLoadDone = useRef(false);
   const [submitting, setSubmitting] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [showEndShiftForLogout, setShowEndShiftForLogout] = useState(false);
@@ -116,9 +117,10 @@ export default function CashierSalesPage() {
     }
   }, [profile?.branch_id, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchInitialData = async (showPageLoader = true) => {
+  const fetchInitialData = async () => {
+    const isFirstLoad = !initialLoadDone.current;
     try {
-      if (showPageLoader) setLoading(true);
+      if (isFirstLoad) setLoading(true);
 
       // Fetch active products for branch
       const { data: productsData, error: productsError } = await supabase
@@ -165,7 +167,10 @@ export default function CashierSalesPage() {
       console.error('Error fetching initial data:', error);
       showNotification('error', 'Failed to load data');
     } finally {
-      if (showPageLoader) setLoading(false);
+      if (isFirstLoad) {
+        initialLoadDone.current = true;
+        setLoading(false);
+      }
     }
   };
 
@@ -187,7 +192,7 @@ export default function CashierSalesPage() {
       .subscribe();
 
     return () => { expenseSubscription.unsubscribe(); };
-  }, [profile?.branch_id, fetchExpenseTotal]);
+  }, [profile?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateStockCount = (index: number, field: keyof StockCount, value: string) => {
     const updated = [...stockCounts];
