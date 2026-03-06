@@ -1,24 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { DataTable } from '@/components/dashboard/data-table';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
 import { createClient } from '@/lib/supabase/client';
-import { PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon, EyeIcon, EyeOffIcon, Trash2Icon, AlertTriangleIcon } from 'lucide-react';
+import {
+  PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon,
+  EyeIcon, EyeOffIcon, MonitorIcon, ChefHatIcon,
+  Trash2Icon, AlertTriangleIcon,
+} from 'lucide-react';
 import { createEmployee } from '@/lib/actions/create-employee';
 
-interface Employee {
+interface StaffRecord {
   id: string;
-  email: string;
   full_name: string;
-  role: 'cashier' | 'manager' | 'admin' | 'superadmin';
-  branch_id: string | null;
-  branch_name: string;
+  employee_id_number: string | null;
+  kra_pin: string | null;
   phone: string | null;
+  email: string | null;
+  job_title: string;
+  date_of_reporting: string | null;
+  branch_id: string;
+  branch_name: string;
+  next_of_kin_name: string | null;
+  next_of_kin_phone: string | null;
+  has_pos_account: boolean;
+  pos_profile_id: string | null;
+  pos_role: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -28,378 +39,463 @@ interface Branch {
   name: string;
 }
 
-export default function AdminEmployeesPage() {
+const emptyForm = {
+  full_name: '',
+  employee_id_number: '',
+  kra_pin: '',
+  phone: '',
+  email: '',
+  job_title: '',
+  date_of_reporting: '',
+  branch_id: '',
+  next_of_kin_name: '',
+  next_of_kin_phone: '',
+  has_pos_account: false,
+  pos_role: 'cashier' as 'cashier' | 'manager' | 'admin' | 'superadmin',
+  password: '',
+  is_active: true,
+};
+
+const inputCls = 'w-full px-3 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50';
+const labelCls = 'text-xs font-medium text-muted-foreground mb-1 block';
+
+export default function SuperadminEmployeesPage() {
   const { profile } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [staff, setStaff] = useState<StaffRecord[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
 
-  // Filter state
-  const [selectedBranch, setSelectedBranch] = useState<string>('all');
-  const [selectedRole, setSelectedRole] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedBranch, setSelectedBranch] = useState('all');
+  const [selectedType, setSelectedType] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState('all');
 
-  // Modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [editingRecord, setEditingRecord] = useState<StaffRecord | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [formData, setFormData] = useState({ ...emptyForm });
+  const [showPassword, setShowPassword] = useState(false);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Delete state
   const [showDeleteSection, setShowDeleteSection] = useState(false);
   const [deleteNameInput, setDeleteNameInput] = useState('');
   const [deleting, setDeleting] = useState(false);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    full_name: '',
-    email: '',
-    phone: '',
-    password: '',
-    role: 'cashier' as 'cashier' | 'manager' | 'admin' | 'superadmin',
-    branch_id: '',
-    is_active: true,
-  });
-  const [showPassword, setShowPassword] = useState(false);
-
-  // Notification state
-  const [notification, setNotification] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
-
-  const showNotification = (type: 'success' | 'error', message: string) => {
+  const showNotif = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 4000);
   };
 
-  // Fetch branches
+  const set = (field: string, value: any) => setFormData(prev => ({ ...prev, [field]: value }));
+
   useEffect(() => {
     const fetchBranches = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('branches')
-          .select('id, name')
-          .eq('is_active', true)
-          .order('name');
-
-        if (error) throw error;
-        setBranches(data || []);
-      } catch (error) {
-        console.error('Error fetching branches:', error);
-      }
+      const { data } = await supabase.from('branches').select('id, name').eq('is_active', true).order('name');
+      setBranches(data || []);
     };
-
     fetchBranches();
   }, []);
 
-  // Fetch employees
-  const fetchEmployees = async () => {
+  const fetchStaff = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      // Build query - superadmin can see all roles
       let query = supabase
-        .from('profiles')
-        .select('id, email, full_name, role, branch_id, phone, is_active, created_at')
-        .in('role', ['cashier', 'manager', 'admin', 'superadmin'])
+        .from('employees')
+        .select('*, branches!branch_id(name), profiles!pos_profile_id(role)')
         .order('created_at', { ascending: false });
 
-      // Filter by branch
-      if (selectedBranch !== 'all') {
-        query = query.eq('branch_id', selectedBranch);
-      }
-
-      // Filter by role
-      if (selectedRole !== 'all') {
-        query = query.eq('role', selectedRole);
-      }
-
-      // Filter by status
-      if (selectedStatus !== 'all') {
-        query = query.eq('is_active', selectedStatus === 'active');
-      }
+      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
+      if (selectedType === 'pos') query = query.eq('has_pos_account', true);
+      if (selectedType === 'non-pos') query = query.eq('has_pos_account', false);
+      if (selectedStatus !== 'all') query = query.eq('is_active', selectedStatus === 'active');
 
       const { data, error } = await query;
-
       if (error) throw error;
 
-      // Get branch names
-      const branchIds = [...new Set(data?.map(e => e.branch_id).filter(Boolean) || [])];
-      let branchMap = new Map<string, string>();
-
-      if (branchIds.length > 0) {
-        const { data: branchData } = await supabase
-          .from('branches')
-          .select('id, name')
-          .in('id', branchIds);
-        branchData?.forEach(b => branchMap.set(b.id, b.name));
-      }
-
-      // Map employees with branch names
-      const employeesWithBranches = data?.map(emp => ({
-        ...emp,
-        branch_name: emp.branch_id ? branchMap.get(emp.branch_id) || 'Unknown' : 'No Branch',
-      })) || [];
-
-      setEmployees(employeesWithBranches);
-    } catch (error) {
-      console.error('Error fetching employees:', error);
-      showNotification('error', 'Failed to load employees');
+      const mapped: StaffRecord[] = (data || []).map((r: any) => ({
+        ...r,
+        branch_name: r.branches?.name || 'Unknown',
+        pos_role: r.profiles?.role || null,
+      }));
+      setStaff(mapped);
+    } catch (err) {
+      console.error(err);
+      showNotif('error', 'Failed to load staff records');
     } finally {
       setLoading(false);
     }
+  }, [selectedBranch, selectedType, selectedStatus]);
+
+  useEffect(() => { fetchStaff(); }, [fetchStaff]);
+
+  const resetForm = () => {
+    setFormData({ ...emptyForm });
+    setShowPassword(false);
   };
 
-  useEffect(() => {
-    fetchEmployees();
-  }, [selectedBranch, selectedRole, selectedStatus]);
-
-  // Handle edit
-  const openEditModal = (employee: Employee) => {
-    setEditingEmployee(employee);
+  const openEdit = (record: StaffRecord) => {
+    setEditingRecord(record);
     setFormData({
-      full_name: employee.full_name,
-      email: employee.email,
-      phone: employee.phone || '',
-      password: '', // Not used for edit, but required by type
-      role: employee.role,
-      branch_id: employee.branch_id || '',
-      is_active: employee.is_active,
+      full_name: record.full_name,
+      employee_id_number: record.employee_id_number || '',
+      kra_pin: record.kra_pin || '',
+      phone: record.phone || '',
+      email: record.email || '',
+      job_title: record.job_title,
+      date_of_reporting: record.date_of_reporting || '',
+      branch_id: record.branch_id,
+      next_of_kin_name: record.next_of_kin_name || '',
+      next_of_kin_phone: record.next_of_kin_phone || '',
+      has_pos_account: record.has_pos_account,
+      pos_role: (record.pos_role as typeof emptyForm['pos_role']) || 'cashier',
+      password: '',
+      is_active: record.is_active,
     });
     setShowDeleteSection(false);
     setDeleteNameInput('');
     setShowEditModal(true);
   };
 
-  // Handle permanent delete (superadmin only)
-  const handleDelete = async () => {
-    if (!editingEmployee) return;
+  const handleCreate = async () => {
+    if (!formData.full_name.trim() || !formData.job_title.trim() || !formData.branch_id) {
+      showNotif('error', 'Full name, job title, and branch are required');
+      return;
+    }
+    if (formData.has_pos_account) {
+      if (!formData.email.trim()) { showNotif('error', 'Email is required for POS accounts'); return; }
+      if (formData.password.length < 6) { showNotif('error', 'Password must be at least 6 characters'); return; }
+    }
+
+    setSaving(true);
     try {
-      setDeleting(true);
-      const res = await fetch('/api/superadmin/delete-user', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: editingEmployee.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        showNotification('error', data.error || 'Failed to delete user');
-        return;
+      let posProfileId: string | null = null;
+
+      if (formData.has_pos_account) {
+        const result = await createEmployee({
+          email: formData.email.trim(),
+          password: formData.password,
+          full_name: formData.full_name.trim(),
+          role: formData.pos_role,
+          branch_id: formData.branch_id,
+          phone: formData.phone.trim() || undefined,
+        });
+        if (!result.success) {
+          showNotif('error', result.error || 'Failed to create POS account');
+          return;
+        }
+        posProfileId = result.userId || null;
       }
-      showNotification('success', `${editingEmployee.full_name} has been permanently deleted`);
+
+      const { error } = await supabase.from('employees').insert({
+        full_name: formData.full_name.trim(),
+        employee_id_number: formData.employee_id_number.trim() || null,
+        kra_pin: formData.kra_pin.trim() || null,
+        phone: formData.phone.trim() || null,
+        email: formData.email.trim() || null,
+        job_title: formData.job_title.trim(),
+        date_of_reporting: formData.date_of_reporting || null,
+        branch_id: formData.branch_id,
+        next_of_kin_name: formData.next_of_kin_name.trim() || null,
+        next_of_kin_phone: formData.next_of_kin_phone.trim() || null,
+        has_pos_account: formData.has_pos_account,
+        pos_profile_id: posProfileId,
+        is_active: true,
+      });
+
+      if (error) throw error;
+
+      showNotif('success', 'Staff record created successfully');
+      setShowAddModal(false);
+      resetForm();
+      fetchStaff();
+    } catch (err: any) {
+      console.error(err);
+      showNotif('error', err.message || 'Failed to create record');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!editingRecord || !formData.full_name.trim() || !formData.job_title.trim() || !formData.branch_id) {
+      showNotif('error', 'Full name, job title, and branch are required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('employees').update({
+        full_name: formData.full_name.trim(),
+        employee_id_number: formData.employee_id_number.trim() || null,
+        kra_pin: formData.kra_pin.trim() || null,
+        phone: formData.phone.trim() || null,
+        email: formData.email.trim() || null,
+        job_title: formData.job_title.trim(),
+        date_of_reporting: formData.date_of_reporting || null,
+        branch_id: formData.branch_id,
+        next_of_kin_name: formData.next_of_kin_name.trim() || null,
+        next_of_kin_phone: formData.next_of_kin_phone.trim() || null,
+        is_active: formData.is_active,
+      }).eq('id', editingRecord.id);
+
+      if (error) throw error;
+
+      // Sync POS profile if applicable
+      if (editingRecord.has_pos_account && editingRecord.pos_profile_id) {
+        await supabase.from('profiles').update({
+          full_name: formData.full_name.trim(),
+          phone: formData.phone.trim() || null,
+          role: formData.pos_role,
+          branch_id: formData.branch_id,
+          is_active: formData.is_active,
+        }).eq('id', editingRecord.pos_profile_id);
+      }
+
+      showNotif('success', 'Record updated successfully');
       setShowEditModal(false);
-      setEditingEmployee(null);
+      setEditingRecord(null);
+      fetchStaff();
+    } catch (err: any) {
+      console.error(err);
+      showNotif('error', 'Failed to update record');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleStatus = async (record: StaffRecord) => {
+    try {
+      const newStatus = !record.is_active;
+      const { error } = await supabase.from('employees').update({ is_active: newStatus }).eq('id', record.id);
+      if (error) throw error;
+      if (record.has_pos_account && record.pos_profile_id) {
+        await supabase.from('profiles').update({ is_active: newStatus }).eq('id', record.pos_profile_id);
+      }
+      showNotif('success', `Staff member ${newStatus ? 'activated' : 'deactivated'}`);
+      fetchStaff();
+    } catch {
+      showNotif('error', 'Failed to update status');
+    }
+  };
+
+  // Permanent delete — superadmin only
+  const handleDelete = async () => {
+    if (!editingRecord) return;
+    setDeleting(true);
+    try {
+      // If the employee has a POS account, delete from auth + profiles via API
+      if (editingRecord.has_pos_account && editingRecord.pos_profile_id) {
+        const res = await fetch('/api/superadmin/delete-user', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: editingRecord.pos_profile_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) { showNotif('error', data.error || 'Failed to delete POS account'); return; }
+      }
+
+      // Delete the employee record
+      const { error } = await supabase.from('employees').delete().eq('id', editingRecord.id);
+      if (error) throw error;
+
+      showNotif('success', `${editingRecord.full_name} has been permanently deleted`);
+      setShowEditModal(false);
+      setEditingRecord(null);
       setDeleteNameInput('');
       setShowDeleteSection(false);
-      fetchEmployees();
-    } catch {
-      showNotification('error', 'Failed to delete user');
+      fetchStaff();
+    } catch (err: any) {
+      showNotif('error', 'Failed to delete staff record');
     } finally {
       setDeleting(false);
     }
   };
 
-  const handleUpdate = async () => {
-    // Branch is required for cashiers and managers, but not for admin/superadmin
-    const requiresBranch = formData.role === 'cashier' || formData.role === 'manager';
+  const totalStaff  = staff.length;
+  const activeStaff = staff.filter(s => s.is_active).length;
+  const posCount    = staff.filter(s => s.has_pos_account).length;
+  const nonPosCount = staff.filter(s => !s.has_pos_account).length;
 
-    if (!editingEmployee || !formData.full_name) {
-      showNotification('error', 'Please fill in all required fields');
-      return;
-    }
-
-    if (requiresBranch && !formData.branch_id) {
-      showNotification('error', 'Branch is required for cashiers and managers');
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: formData.full_name.trim(),
-          phone: formData.phone.trim() || null,
-          role: formData.role,
-          branch_id: formData.branch_id || null,
-          is_active: formData.is_active,
-        })
-        .eq('id', editingEmployee.id);
-
-      if (error) throw error;
-
-      showNotification('success', 'Employee updated successfully');
-      setShowEditModal(false);
-      setEditingEmployee(null);
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error updating employee:', error);
-      showNotification('error', 'Failed to update employee');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Handle toggle active status
-  const handleToggleStatus = async (employee: Employee) => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_active: !employee.is_active })
-        .eq('id', employee.id);
-
-      if (error) throw error;
-
-      showNotification('success', `Employee ${employee.is_active ? 'deactivated' : 'activated'}`);
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error toggling status:', error);
-      showNotification('error', 'Failed to update status');
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      full_name: '',
-      email: '',
-      phone: '',
-      password: '',
-      role: 'cashier',
-      branch_id: '',
-      is_active: true,
-    });
-    setShowPassword(false);
-  };
-
-  // Handle create new employee
-  const handleCreate = async () => {
-    // Branch is required for cashiers and managers, but not for admin/superadmin
-    const requiresBranch = formData.role === 'cashier' || formData.role === 'manager';
-
-    if (!formData.full_name || !formData.email || !formData.password) {
-      showNotification('error', 'Please fill in all required fields');
-      return;
-    }
-
-    if (requiresBranch && !formData.branch_id) {
-      showNotification('error', 'Branch is required for cashiers and managers');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      showNotification('error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      const result = await createEmployee({
-        email: formData.email.trim(),
-        password: formData.password,
-        full_name: formData.full_name.trim(),
-        role: formData.role,
-        branch_id: formData.branch_id || null,
-        phone: formData.phone.trim() || undefined,
-      });
-
-      if (!result.success) {
-        showNotification('error', result.error || 'Failed to create employee');
-        return;
-      }
-
-      showNotification('success', 'Employee created successfully');
-      setShowAddModal(false);
-      resetForm();
-      fetchEmployees();
-    } catch (error) {
-      console.error('Error creating employee:', error);
-      showNotification('error', 'Failed to create employee');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const employeeColumns = [
-    { key: 'full_name', label: 'Name' },
-    { key: 'email', label: 'Email' },
-    { key: 'branch_name', label: 'Branch' },
-    {
-      key: 'role',
-      label: 'Role',
-      render: (value: string) => (
-        <Badge variant={value === 'cashier' ? 'secondary' : 'default'} className="capitalize">
-          {value}
-        </Badge>
-      ),
-    },
-    {
-      key: 'is_active',
-      label: 'Status',
-      render: (value: boolean) => (
-        <Badge variant={value ? 'default' : 'destructive'}>
-          {value ? 'Active' : 'Inactive'}
-        </Badge>
-      ),
-    },
-    {
-      key: 'created_at',
-      label: 'Joined',
-      render: (value: string) => new Date(value).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' }),
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (_: any, row: Employee) => (
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => openEditModal(row)}>
-            <PencilIcon className="h-3 w-3 mr-1" />
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant={row.is_active ? 'destructive' : 'default'}
-            onClick={() => handleToggleStatus(row)}
-          >
-            {row.is_active ? 'Deactivate' : 'Activate'}
-          </Button>
+  // ── Shared form fields ──────────────────────────────────────────────────────
+  const renderFormFields = (isEdit: boolean) => (
+    <div className="space-y-5">
+      {/* Basic Info */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Basic Information</h3>
+        <div className="grid grid-cols-1 gap-3">
+          <div>
+            <label className={labelCls}>Full Name *</label>
+            <input type="text" value={formData.full_name} onChange={e => set('full_name', e.target.value)}
+              placeholder="e.g., John Doe" className={inputCls} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Job Title *</label>
+              <select value={formData.job_title} onChange={e => set('job_title', e.target.value)} className={inputCls}>
+                <option value="">Select title</option>
+                <option value="Cashier">Cashier</option>
+                <option value="Manager">Manager</option>
+                <option value="Chef">Chef</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Branch *</label>
+              <select value={formData.branch_id} onChange={e => set('branch_id', e.target.value)} className={inputCls}>
+                <option value="">Select Branch</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Date of Reporting</label>
+              <input type="date" value={formData.date_of_reporting} onChange={e => set('date_of_reporting', e.target.value)}
+                className={inputCls} />
+            </div>
+            {isEdit && (
+              <div className="flex items-end pb-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={formData.is_active} onChange={e => set('is_active', e.target.checked)}
+                    className="h-4 w-4 rounded" />
+                  <span className="text-sm font-medium">Active</span>
+                </label>
+              </div>
+            )}
+          </div>
         </div>
-      ),
-    },
-  ];
+      </div>
 
-  // Stats
-  const totalEmployees = employees.length;
-  const activeEmployees = employees.filter(e => e.is_active).length;
-  const cashierCount = employees.filter(e => e.role === 'cashier').length;
-  const managerCount = employees.filter(e => e.role === 'manager').length;
-  const adminCount = employees.filter(e => e.role === 'admin').length;
-  const superadminCount = employees.filter(e => e.role === 'superadmin').length;
-
-  if (loading && employees.length === 0) {
-    return (
-      <DashboardLayout userName={profile?.full_name || 'Superadmin'} userRole="superadmin">
-        <div className="flex items-center justify-center h-96">
-          <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
+      {/* Identity */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Identity Documents</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>ID Number</label>
+            <input type="text" value={formData.employee_id_number} onChange={e => set('employee_id_number', e.target.value)}
+              placeholder="National ID" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>KRA PIN</label>
+            <input type="text" value={formData.kra_pin} onChange={e => set('kra_pin', e.target.value)}
+              placeholder="e.g., A012345678B" className={inputCls} />
+          </div>
         </div>
-      </DashboardLayout>
-    );
-  }
+      </div>
 
+      {/* Contact */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Contact Details</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Phone</label>
+            <input type="tel" value={formData.phone} onChange={e => set('phone', e.target.value)}
+              placeholder="e.g., 0712345678" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Email{formData.has_pos_account && !isEdit ? ' *' : ''}</label>
+            <input type="email" value={formData.email} onChange={e => set('email', e.target.value)}
+              placeholder="e.g., john@company.com"
+              className={isEdit && editingRecord?.has_pos_account ? `${inputCls} bg-muted cursor-not-allowed` : inputCls}
+              readOnly={isEdit && editingRecord?.has_pos_account} />
+            {isEdit && editingRecord?.has_pos_account && (
+              <p className="text-xs text-muted-foreground mt-1">Email cannot be changed for POS accounts</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Next of Kin */}
+      <div>
+        <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Next of Kin</h3>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Name</label>
+            <input type="text" value={formData.next_of_kin_name} onChange={e => set('next_of_kin_name', e.target.value)}
+              placeholder="Full name" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Phone</label>
+            <input type="tel" value={formData.next_of_kin_phone} onChange={e => set('next_of_kin_phone', e.target.value)}
+              placeholder="e.g., 0723456789" className={inputCls} />
+          </div>
+        </div>
+      </div>
+
+      {/* POS Account — create only */}
+      {!isEdit && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">POS Account</h3>
+          <label className="flex items-center gap-2 cursor-pointer mb-3">
+            <input type="checkbox" checked={formData.has_pos_account} onChange={e => set('has_pos_account', e.target.checked)}
+              className="h-4 w-4 rounded" />
+            <span className="text-sm font-medium">This staff member has a POS system account</span>
+          </label>
+          {formData.has_pos_account && (
+            <div className="grid grid-cols-2 gap-3 mt-2 p-3 border rounded-lg bg-muted/30">
+              <div>
+                <label className={labelCls}>POS Role *</label>
+                <select value={formData.pos_role} onChange={e => set('pos_role', e.target.value)} className={inputCls}>
+                  <option value="cashier">Cashier</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Admin</option>
+                  <option value="superadmin">Superadmin</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Password *</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={formData.password}
+                    onChange={e => set('password', e.target.value)}
+                    placeholder="Min 6 characters"
+                    className={`${inputCls} pr-9`}
+                  />
+                  <button type="button" onClick={() => setShowPassword(p => !p)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* POS Account edit — role only */}
+      {isEdit && editingRecord?.has_pos_account && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">POS Account</h3>
+          <div className="p-3 border rounded-lg bg-muted/30">
+            <div className="w-1/2">
+              <label className={labelCls}>POS Role</label>
+              <select value={formData.pos_role} onChange={e => set('pos_role', e.target.value)} className={inputCls}>
+                <option value="cashier">Cashier</option>
+                <option value="manager">Manager</option>
+                <option value="admin">Admin</option>
+                <option value="superadmin">Superadmin</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <DashboardLayout userName={profile?.full_name || 'Superadmin'} userRole="superadmin">
       <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-8">
+
           {/* Notification */}
           {notification && (
-            <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-lg ${
-              notification.type === 'success'
-                ? 'bg-green-500 text-white'
-                : 'bg-red-500 text-white'
+            <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-lg shadow-lg text-white ${
+              notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
             }`}>
               {notification.message}
             </div>
@@ -409,380 +505,183 @@ export default function AdminEmployeesPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-4xl font-bold">Employee Management</h1>
-              <p className="text-muted-foreground">
-                Manage all employees: cashiers, managers, admins, and superadmins
-              </p>
+              <p className="text-muted-foreground">All staff: POS accounts and non-POS personnel</p>
             </div>
             <Button onClick={() => { resetForm(); setShowAddModal(true); }}>
               <PlusIcon className="h-4 w-4 mr-2" />
-              Add Employee
+              Add Staff
             </Button>
           </div>
 
           {/* Stats */}
-          <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-lg">
-                    <UsersIcon className="h-6 w-6 text-primary" />
+          <div className="grid gap-4 md:grid-cols-4">
+            {[
+              { label: 'Total Staff',   value: totalStaff,  icon: UsersIcon,   color: 'bg-primary/10 text-primary' },
+              { label: 'Active',        value: activeStaff, icon: UsersIcon,   color: 'bg-green-100 text-green-600 dark:bg-green-900/20' },
+              { label: 'POS Accounts',  value: posCount,    icon: MonitorIcon, color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/20' },
+              { label: 'Non-POS Staff', value: nonPosCount, icon: ChefHatIcon, color: 'bg-orange-100 text-orange-600 dark:bg-orange-900/20' },
+            ].map(({ label, value, icon: Icon, color }) => (
+              <Card key={label}>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-lg ${color}`}><Icon className="h-6 w-6" /></div>
+                    <div>
+                      <p className="text-2xl font-bold">{value}</p>
+                      <p className="text-sm text-muted-foreground">{label}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{totalEmployees}</p>
-                    <p className="text-sm text-muted-foreground">Total Employees</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-green-100 dark:bg-green-900/20 rounded-lg">
-                    <UsersIcon className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{activeEmployees}</p>
-                    <p className="text-sm text-muted-foreground">Active</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-                    <UsersIcon className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{cashierCount}</p>
-                    <p className="text-sm text-muted-foreground">Cashiers</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-purple-100 dark:bg-purple-900/20 rounded-lg">
-                    <UsersIcon className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{managerCount}</p>
-                    <p className="text-sm text-muted-foreground">Managers</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-orange-100 dark:bg-orange-900/20 rounded-lg">
-                    <UsersIcon className="h-6 w-6 text-orange-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{adminCount}</p>
-                    <p className="text-sm text-muted-foreground">Admins</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-red-100 dark:bg-red-900/20 rounded-lg">
-                    <UsersIcon className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{superadminCount}</p>
-                    <p className="text-sm text-muted-foreground">Superadmins</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ))}
           </div>
 
           {/* Filters */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Filters</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Branch Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Branch</label>
-                  <select
-                    value={selectedBranch}
-                    onChange={(e) => setSelectedBranch(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                  >
-                    <option value="all">All Branches</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>{branch.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Role Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Role</label>
-                  <select
-                    value={selectedRole}
-                    onChange={(e) => setSelectedRole(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                  >
-                    <option value="all">All Roles</option>
-                    <option value="cashier">Cashier</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                    <option value="superadmin">Superadmin</option>
-                  </select>
-                </div>
-
-                {/* Status Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Status</label>
-                  <select
-                    value={selectedStatus}
-                    onChange={(e) => setSelectedStatus(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Employees Table */}
-          {loading ? (
-            <div className="flex items-center justify-center h-48">
-              <Loader2Icon className="h-8 w-8 animate-spin text-muted-foreground" />
+          <div className="flex flex-wrap gap-4 items-end">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Branch</label>
+              <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm">
+                <option value="all">All Branches</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
             </div>
-          ) : (
-            <DataTable
-              title="All Employees"
-              columns={employeeColumns}
-              data={employees}
-            />
-          )}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Type</label>
+              <select value={selectedType} onChange={e => setSelectedType(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm">
+                <option value="all">All Staff</option>
+                <option value="pos">POS Accounts</option>
+                <option value="non-pos">Non-POS Only</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
+              <select value={selectedStatus} onChange={e => setSelectedStatus(e.target.value)}
+                className="px-3 py-2 border rounded-lg bg-background text-sm">
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Table */}
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50">
+                    <th className="text-left px-4 py-3 font-medium">Name / Title</th>
+                    <th className="text-left px-4 py-3 font-medium">Branch</th>
+                    <th className="text-left px-4 py-3 font-medium">Type</th>
+                    <th className="text-left px-4 py-3 font-medium">Phone</th>
+                    <th className="text-left px-4 py-3 font-medium">Reporting Date</th>
+                    <th className="text-left px-4 py-3 font-medium">Status</th>
+                    <th className="text-left px-4 py-3 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-16">
+                        <Loader2Icon className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                      </td>
+                    </tr>
+                  ) : staff.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-16 text-muted-foreground">No staff records found</td>
+                    </tr>
+                  ) : staff.map(record => (
+                    <tr key={record.id} className="border-b hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{record.full_name}</div>
+                        <div className="text-xs text-muted-foreground">{record.job_title}</div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{record.branch_name}</td>
+                      <td className="px-4 py-3">
+                        {record.has_pos_account ? (
+                          <Badge variant="default" className="text-xs capitalize">
+                            POS · {record.pos_role || 'Staff'}
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">Non-POS</Badge>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{record.phone || '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {record.date_of_reporting
+                          ? new Date(record.date_of_reporting).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' })
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={record.is_active ? 'default' : 'destructive'}>
+                          {record.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => openEdit(record)}>
+                            <PencilIcon className="h-3 w-3 mr-1" />Edit
+                          </Button>
+                          <Button size="sm" variant={record.is_active ? 'destructive' : 'default'}
+                            onClick={() => handleToggleStatus(record)}>
+                            {record.is_active ? 'Deactivate' : 'Activate'}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       </div>
 
-      {/* Add Employee Modal */}
+      {/* ── Add Staff Modal ── */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Add New Employee</h2>
-              <button onClick={() => setShowAddModal(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h2 className="text-xl font-bold">Add New Staff Member</h2>
+              <button onClick={() => setShowAddModal(false)} className="text-muted-foreground hover:text-foreground">
                 <XIcon className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Full Name *</label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  placeholder="e.g., John Doe"
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Email *</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="e.g., john@company.com"
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Password *</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Min 6 characters"
-                    className="w-full px-4 py-2 border rounded-lg bg-background pr-10"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Phone</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="e.g., 0712345678"
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Role *</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'cashier' | 'manager' | 'admin' | 'superadmin' })}
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                >
-                  <option value="cashier">Cashier</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                  <option value="superadmin">Superadmin</option>
-                </select>
-              </div>
-              {(formData.role === 'cashier' || formData.role === 'manager') && (
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Branch *</label>
-                  <select
-                    value={formData.branch_id}
-                    onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                  >
-                    <option value="">Select Branch</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>{branch.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={() => setShowAddModal(false)} className="flex-1">
-                  Cancel
-                </Button>
-                <Button onClick={handleCreate} className="flex-1" disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                      Creating...
-                    </>
-                  ) : (
-                    'Create Employee'
-                  )}
-                </Button>
-              </div>
+            <div className="overflow-y-auto p-6 flex-1">{renderFormFields(false)}</div>
+            <div className="flex gap-3 p-6 border-t">
+              <Button variant="outline" onClick={() => setShowAddModal(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleCreate} className="flex-1" disabled={saving}>
+                {saving ? <><Loader2Icon className="h-4 w-4 animate-spin mr-2" />Creating...</> : 'Create Record'}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Modal */}
-      {showEditModal && editingEmployee && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Edit Employee</h2>
-              <button onClick={() => setShowEditModal(false)}>
+      {/* ── Edit Staff Modal ── */}
+      {showEditModal && editingRecord && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-background rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl">
+            <div className="flex justify-between items-center p-6 border-b">
+              <div>
+                <h2 className="text-xl font-bold">Edit Staff Record</h2>
+                <p className="text-sm text-muted-foreground">{editingRecord.full_name}</p>
+              </div>
+              <button onClick={() => setShowEditModal(false)} className="text-muted-foreground hover:text-foreground">
                 <XIcon className="h-5 w-5" />
               </button>
             </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Full Name *</label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Email</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  disabled
-                  className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Email cannot be changed</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Phone</label>
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="e.g., 0712345678"
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-2 block">Role *</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as 'cashier' | 'manager' | 'admin' | 'superadmin' })}
-                  className="w-full px-4 py-2 border rounded-lg bg-background"
-                >
-                  <option value="cashier">Cashier</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                  <option value="superadmin">Superadmin</option>
-                </select>
-              </div>
-              {(formData.role === 'cashier' || formData.role === 'manager') && (
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Branch *</label>
-                  <select
-                    value={formData.branch_id}
-                    onChange={(e) => setFormData({ ...formData, branch_id: e.target.value })}
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                  >
-                    <option value="">Select Branch</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>{branch.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="h-4 w-4"
-                />
-                <label htmlFor="is_active" className="text-sm font-medium">Active</label>
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button variant="outline" onClick={() => setShowEditModal(false)} className="flex-1">
-                  Cancel
-                </Button>
-                <Button onClick={handleUpdate} className="flex-1" disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2Icon className="h-4 w-4 animate-spin mr-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </Button>
-              </div>
+            <div className="overflow-y-auto p-6 flex-1">
+              {renderFormFields(true)}
 
               {/* ── Danger Zone ─────────────────────────────────────────── */}
-              <div className="border-t pt-4 mt-2">
+              <div className="border-t mt-6 pt-4">
                 {!showDeleteSection ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteSection(true)}
-                    className="flex items-center gap-2 text-sm text-destructive hover:underline"
-                  >
+                  <button type="button" onClick={() => setShowDeleteSection(true)}
+                    className="flex items-center gap-2 text-sm text-destructive hover:underline">
                     <Trash2Icon className="h-4 w-4" />
-                    Permanently delete this user
+                    Permanently delete this staff record
                   </button>
                 ) : (
                   <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
@@ -791,53 +690,43 @@ export default function AdminEmployeesPage() {
                       <div>
                         <p className="text-sm font-semibold text-destructive">Danger Zone</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          This action permanently deletes the user from the system and cannot be undone.
-                          All associated data will be removed.
+                          This action permanently deletes the staff record from the system and cannot be undone.
+                          {editingRecord.has_pos_account && ' The associated POS account will also be removed.'}
                         </p>
                       </div>
                     </div>
-
                     <div>
                       <label className="text-xs font-medium block mb-1">
-                        Type <span className="font-bold">{editingEmployee.full_name}</span> to confirm
+                        Type <span className="font-bold">{editingRecord.full_name}</span> to confirm
                       </label>
-                      <input
-                        type="text"
-                        value={deleteNameInput}
+                      <input type="text" value={deleteNameInput}
                         onChange={e => setDeleteNameInput(e.target.value)}
                         placeholder="Enter exact name to confirm"
                         className="w-full px-3 py-2 text-sm border border-destructive/40 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-destructive"
-                        disabled={deleting}
-                      />
+                        disabled={deleting} />
                     </div>
-
                     <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => { setShowDeleteSection(false); setDeleteNameInput(''); }}
-                        disabled={deleting}
-                      >
+                      <Button variant="outline" size="sm" className="flex-1" disabled={deleting}
+                        onClick={() => { setShowDeleteSection(false); setDeleteNameInput(''); }}>
                         Cancel
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="flex-1 gap-2"
-                        disabled={deleteNameInput !== editingEmployee.full_name || deleting}
-                        onClick={handleDelete}
-                      >
-                        {deleting ? (
-                          <><Loader2Icon className="h-4 w-4 animate-spin" />Deleting…</>
-                        ) : (
-                          <><Trash2Icon className="h-4 w-4" />Delete Permanently</>
-                        )}
+                      <Button variant="destructive" size="sm" className="flex-1 gap-2"
+                        disabled={deleteNameInput !== editingRecord.full_name || deleting}
+                        onClick={handleDelete}>
+                        {deleting
+                          ? <><Loader2Icon className="h-4 w-4 animate-spin" />Deleting…</>
+                          : <><Trash2Icon className="h-4 w-4" />Delete Permanently</>}
                       </Button>
                     </div>
                   </div>
                 )}
               </div>
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <Button variant="outline" onClick={() => setShowEditModal(false)} className="flex-1">Cancel</Button>
+              <Button onClick={handleUpdate} className="flex-1" disabled={saving}>
+                {saving ? <><Loader2Icon className="h-4 w-4 animate-spin mr-2" />Saving...</> : 'Save Changes'}
+              </Button>
             </div>
           </div>
         </div>
