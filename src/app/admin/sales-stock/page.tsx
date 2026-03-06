@@ -185,18 +185,64 @@ export default function AdminSalesStockPage() {
   const fetchStockCounts = async (shiftId: string) => {
     if (stockCounts[shiftId] !== undefined) return;
     try {
+      const shift = records.find(r => r.id === shiftId);
+
+      // ── 1. Fetch stock count rows ─────────────────────────────────────────
       const { data, error } = await supabase
         .from('stock_counts')
         .select('*, products:product_id(product_name, base_price)')
         .eq('shift_id', shiftId);
       if (error) throw error;
 
+      // ── 2. Compute sales_qty from order_items for this shift ──────────────
+      // sales_qty is not stored in stock_counts — derive it from actual orders
+      const salesMap = new Map<string, number>(); // product_id → qty sold
+
+      if (shift) {
+        // Get all orders for this branch on the shift date
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('id, created_at')
+          .eq('branch_id', shift.branch_id)
+          .gte('created_at', `${shift.shift_date}T00:00:00`)
+          .lte('created_at', `${shift.shift_date}T23:59:59`);
+
+        // Filter orders to only those belonging to this shift_type by Kenya hour
+        const matchingOrderIds = (orders || [])
+          .filter(o => {
+            const kenyaHour = parseInt(
+              new Date(o.created_at).toLocaleString('en-US', {
+                timeZone: 'Africa/Nairobi',
+                hour: 'numeric',
+                hour12: false,
+              })
+            );
+            return shift.shift_type === 'day'
+              ? kenyaHour >= 7 && kenyaHour < 19
+              : kenyaHour < 7 || kenyaHour >= 19;
+          })
+          .map(o => o.id);
+
+        if (matchingOrderIds.length > 0) {
+          const { data: items } = await supabase
+            .from('order_items')
+            .select('product_id, quantity')
+            .in('order_id', matchingOrderIds);
+
+          (items || []).forEach((item: any) => {
+            if (item.product_id) {
+              salesMap.set(item.product_id, (salesMap.get(item.product_id) || 0) + Number(item.quantity));
+            }
+          });
+        }
+      }
+
       const counts: StockCount[] = (data || []).map((item: any) => ({
         ...item,
         product_name: item.products?.product_name || 'Unknown Product',
         product_price: item.products?.base_price ?? 0,
         transfer: item.transfer || 0,
-        sales_qty: item.sales_qty || 0,
+        sales_qty: salesMap.get(item.product_id) || 0,
       }));
       setStockCounts(prev => ({ ...prev, [shiftId]: counts }));
     } catch (error) {
