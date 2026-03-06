@@ -113,7 +113,7 @@ export default function CashierOrdersPage() {
   // Remove item from cart
   const handleRemoveItem = (productId: string) => {
     setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
-    showNotification('info', 'Item removed from order');
+    showNotification('success', 'Item removed from order');
   };
 
   // Clear entire cart
