@@ -119,7 +119,7 @@ export default function CashierOrdersPage() {
   // Clear entire cart
   const handleClearCart = () => {
     setCartItems([]);
-    showNotification('info', 'Order cleared');
+    showNotification('success', 'Order cleared');
   };
 
   // Calculate total
