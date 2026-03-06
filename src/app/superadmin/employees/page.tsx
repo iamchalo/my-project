@@ -674,56 +674,63 @@ export default function SuperadminEmployeesPage() {
             </div>
             <div className="overflow-y-auto p-6 flex-1">
               {renderFormFields(true)}
+            </div>
 
-              {/* ── Danger Zone ─────────────────────────────────────────── */}
-              <div className="border-t mt-6 pt-4">
-                {!showDeleteSection ? (
-                  <button type="button" onClick={() => setShowDeleteSection(true)}
-                    className="flex items-center gap-2 text-sm text-destructive hover:underline">
-                    <Trash2Icon className="h-4 w-4" />
-                    Permanently delete this staff record
-                  </button>
-                ) : (
-                  <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangleIcon className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
-                      <div>
-                        <p className="text-sm font-semibold text-destructive">Danger Zone</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          This action permanently deletes the staff record from the system and cannot be undone.
-                          {editingRecord.has_pos_account && ' The associated POS account will also be removed.'}
-                        </p>
-                      </div>
-                    </div>
+            {/* ── Danger Zone (shown when delete is triggered) ── */}
+            {showDeleteSection && (
+              <div className="px-6 pb-4">
+                <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangleIcon className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
                     <div>
-                      <label className="text-xs font-medium block mb-1">
-                        Type <span className="font-bold">{editingRecord.full_name}</span> to confirm
-                      </label>
-                      <input type="text" value={deleteNameInput}
-                        onChange={e => setDeleteNameInput(e.target.value)}
-                        placeholder="Enter exact name to confirm"
-                        className="w-full px-3 py-2 text-sm border border-destructive/40 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-destructive"
-                        disabled={deleting} />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1" disabled={deleting}
-                        onClick={() => { setShowDeleteSection(false); setDeleteNameInput(''); }}>
-                        Cancel
-                      </Button>
-                      <Button variant="destructive" size="sm" className="flex-1 gap-2"
-                        disabled={deleteNameInput !== editingRecord.full_name || deleting}
-                        onClick={handleDelete}>
-                        {deleting
-                          ? <><Loader2Icon className="h-4 w-4 animate-spin" />Deleting…</>
-                          : <><Trash2Icon className="h-4 w-4" />Delete Permanently</>}
-                      </Button>
+                      <p className="text-sm font-semibold text-destructive">Danger Zone</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        This action permanently deletes the staff record and cannot be undone.
+                        {editingRecord.has_pos_account && ' The associated POS login account will also be removed.'}
+                      </p>
                     </div>
                   </div>
-                )}
+                  <div>
+                    <label className="text-xs font-medium block mb-1">
+                      Type <span className="font-bold">{editingRecord.full_name}</span> to confirm
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteNameInput}
+                      onChange={e => setDeleteNameInput(e.target.value)}
+                      placeholder="Enter exact name to confirm"
+                      className="w-full px-3 py-2 text-sm border border-destructive/40 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-destructive"
+                      disabled={deleting}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" disabled={deleting}
+                      onClick={() => { setShowDeleteSection(false); setDeleteNameInput(''); }}>
+                      Cancel
+                    </Button>
+                    <Button variant="destructive" size="sm" className="flex-1 gap-2"
+                      disabled={deleteNameInput !== editingRecord.full_name || deleting}
+                      onClick={handleDelete}>
+                      {deleting
+                        ? <><Loader2Icon className="h-4 w-4 animate-spin" />Deleting…</>
+                        : <><Trash2Icon className="h-4 w-4" />Delete Permanently</>}
+                    </Button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* ── Modal footer ── */}
             <div className="flex gap-3 p-6 border-t">
               <Button variant="outline" onClick={() => setShowEditModal(false)} className="flex-1">Cancel</Button>
+              {!showDeleteSection && (
+                <Button variant="ghost" className="gap-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => setShowDeleteSection(true)} disabled={saving}>
+                  <Trash2Icon className="h-4 w-4" />
+                  Delete
+                </Button>
+              )}
               <Button onClick={handleUpdate} className="flex-1" disabled={saving}>
                 {saving ? <><Loader2Icon className="h-4 w-4 animate-spin mr-2" />Saving...</> : 'Save Changes'}
               </Button>
