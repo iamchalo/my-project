@@ -14,6 +14,7 @@ interface Product {
   product_price: number;
   image_url: string | null;
   is_active: boolean;
+  branch_id?: string;
 }
 
 interface ProductGridProps {
