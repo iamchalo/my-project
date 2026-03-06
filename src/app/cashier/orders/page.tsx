@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ProductGrid } from '@/components/cashier/product-grid';
 import { OrderCart, OrderItem } from '@/components/cashier/order-cart';
+import { ReceiptPreview } from '@/components/cashier/receipt-preview';
 import { useAuth } from '@/lib/auth/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { Loader2, Banknote, Smartphone } from 'lucide-react';
@@ -31,6 +32,7 @@ export default function CashierOrdersPage() {
   const [cartItems, setCartItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<'cash' | 'mpesa' | null>(null);
 
   // Fetch products from the database (using new centralized schema)
   useEffect(() => {
@@ -77,14 +79,12 @@ export default function CashierOrdersPage() {
       const existingItem = prevItems.find((item) => item.id === product.id);
 
       if (existingItem) {
-        // Increment quantity if product already in cart
         return prevItems.map((item) =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       } else {
-        // Add new product to cart
         return [
           ...prevItems,
           {
@@ -119,6 +119,7 @@ export default function CashierOrdersPage() {
   // Clear entire cart
   const handleClearCart = () => {
     setCartItems([]);
+    setSelectedPayment(null);
     showNotification('success', 'Order cleared');
   };
 
@@ -176,8 +177,9 @@ export default function CashierOrdersPage() {
 
       if (itemsError) throw itemsError;
 
-      // Clear cart and show success message
+      // Clear cart and reset payment selection
       setCartItems([]);
+      setSelectedPayment(null);
       showNotification('success', `Order completed - ${paymentMethod === 'mpesa' ? 'M-Pesa' : 'Cash'} payment`);
 
       return true;
@@ -188,23 +190,6 @@ export default function CashierOrdersPage() {
     } finally {
       setProcessing(false);
     }
-  };
-
-  // Payment handlers
-  const handleCashPayment = async () => {
-    if (cartItems.length === 0) {
-      showNotification('error', 'Cannot process empty order');
-      return;
-    }
-    await saveOrder('cash');
-  };
-
-  const handleMpesaPayment = async () => {
-    if (cartItems.length === 0) {
-      showNotification('error', 'Cannot process empty order');
-      return;
-    }
-    await saveOrder('mpesa');
   };
 
   if (loading) {
@@ -264,7 +249,7 @@ export default function CashierOrdersPage() {
             <ProductGrid products={products} onAddToOrder={handleAddToOrder} />
           </div>
 
-          {/* Order Cart (Right Side - 1/4 width) */}
+          {/* Right Side - Cart + Payment */}
           <div className="flex flex-col gap-4 overflow-y-auto">
             <OrderCart
               items={cartItems}
@@ -273,36 +258,60 @@ export default function CashierOrdersPage() {
               onClearCart={handleClearCart}
             />
 
-            {/* Payment Buttons */}
-            {cartItems.length > 0 && (
+            {/* Step 1: Payment method selection */}
+            {cartItems.length > 0 && !selectedPayment && (
               <Card>
                 <CardContent className="p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Select Payment Method
+                  </p>
                   <Button
                     className="w-full gap-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-900 border border-yellow-300"
-                    onClick={handleCashPayment}
-                    disabled={processing}
+                    onClick={() => setSelectedPayment('cash')}
                   >
-                    {processing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Banknote className="h-4 w-4" />
-                    )}
+                    <Banknote className="h-4 w-4" />
                     Cash
                   </Button>
                   <Button
                     className="w-full gap-2 bg-red-100 hover:bg-red-200 text-red-900 border border-red-300"
-                    onClick={handleMpesaPayment}
-                    disabled={processing}
+                    onClick={() => setSelectedPayment('mpesa')}
                   >
-                    {processing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Smartphone className="h-4 w-4" />
-                    )}
+                    <Smartphone className="h-4 w-4" />
                     M-Pesa
                   </Button>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Step 2: Receipt preview + confirm */}
+            {cartItems.length > 0 && selectedPayment && (
+              <div className="space-y-3">
+                <ReceiptPreview
+                  items={cartItems}
+                  total={total}
+                  paymentMethod={selectedPayment}
+                  cashierName={profile?.full_name}
+                />
+                <Button
+                  className="w-full gap-2"
+                  onClick={() => saveOrder(selectedPayment)}
+                  disabled={processing}
+                >
+                  {processing ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
+                  ) : (
+                    `Confirm ${selectedPayment === 'mpesa' ? 'M-Pesa' : 'Cash'} Payment`
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full text-muted-foreground"
+                  onClick={() => setSelectedPayment(null)}
+                  disabled={processing}
+                >
+                  Change Payment Method
+                </Button>
+              </div>
             )}
           </div>
         </div>
