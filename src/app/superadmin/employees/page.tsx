@@ -8,7 +8,7 @@ import { DataTable } from '@/components/dashboard/data-table';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
 import { createClient } from '@/lib/supabase/client';
-import { PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
+import { PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon, EyeIcon, EyeOffIcon, Trash2Icon, AlertTriangleIcon } from 'lucide-react';
 import { createEmployee } from '@/lib/actions/create-employee';
 
 interface Employee {
@@ -46,6 +46,11 @@ export default function AdminEmployeesPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Delete state
+  const [showDeleteSection, setShowDeleteSection] = useState(false);
+  const [deleteNameInput, setDeleteNameInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -164,7 +169,37 @@ export default function AdminEmployeesPage() {
       branch_id: employee.branch_id || '',
       is_active: employee.is_active,
     });
+    setShowDeleteSection(false);
+    setDeleteNameInput('');
     setShowEditModal(true);
+  };
+
+  // Handle permanent delete (superadmin only)
+  const handleDelete = async () => {
+    if (!editingEmployee) return;
+    try {
+      setDeleting(true);
+      const res = await fetch('/api/superadmin/delete-user', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: editingEmployee.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showNotification('error', data.error || 'Failed to delete user');
+        return;
+      }
+      showNotification('success', `${editingEmployee.full_name} has been permanently deleted`);
+      setShowEditModal(false);
+      setEditingEmployee(null);
+      setDeleteNameInput('');
+      setShowDeleteSection(false);
+      fetchEmployees();
+    } catch {
+      showNotification('error', 'Failed to delete user');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleUpdate = async () => {
@@ -647,7 +682,7 @@ export default function AdminEmployeesPage() {
       {/* Edit Modal */}
       {showEditModal && editingEmployee && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-background rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-background rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Edit Employee</h2>
               <button onClick={() => setShowEditModal(false)}>
@@ -736,6 +771,72 @@ export default function AdminEmployeesPage() {
                     'Save Changes'
                   )}
                 </Button>
+              </div>
+
+              {/* ── Danger Zone ─────────────────────────────────────────── */}
+              <div className="border-t pt-4 mt-2">
+                {!showDeleteSection ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteSection(true)}
+                    className="flex items-center gap-2 text-sm text-destructive hover:underline"
+                  >
+                    <Trash2Icon className="h-4 w-4" />
+                    Permanently delete this user
+                  </button>
+                ) : (
+                  <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangleIcon className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-destructive">Danger Zone</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          This action permanently deletes the user from the system and cannot be undone.
+                          All associated data will be removed.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium block mb-1">
+                        Type <span className="font-bold">{editingEmployee.full_name}</span> to confirm
+                      </label>
+                      <input
+                        type="text"
+                        value={deleteNameInput}
+                        onChange={e => setDeleteNameInput(e.target.value)}
+                        placeholder="Enter exact name to confirm"
+                        className="w-full px-3 py-2 text-sm border border-destructive/40 rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-destructive"
+                        disabled={deleting}
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => { setShowDeleteSection(false); setDeleteNameInput(''); }}
+                        disabled={deleting}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="flex-1 gap-2"
+                        disabled={deleteNameInput !== editingEmployee.full_name || deleting}
+                        onClick={handleDelete}
+                      >
+                        {deleting ? (
+                          <><Loader2Icon className="h-4 w-4 animate-spin" />Deleting…</>
+                        ) : (
+                          <><Trash2Icon className="h-4 w-4" />Delete Permanently</>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
