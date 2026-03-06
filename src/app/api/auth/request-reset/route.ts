@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
     const rawToken = await createResetToken(profile.id);
 
     // Build reset URL
-    const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? req.nextUrl.origin;
+    // Priority: explicit env var → Vercel auto URL → request origin (localhost in dev)
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      req.nextUrl.origin;
     const resetLink = `${appUrl}/auth/reset-password?token=${rawToken}`;
 
     // Send email
