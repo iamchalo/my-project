@@ -21,9 +21,12 @@ export async function POST(req: NextRequest) {
       .eq('email', email)
       .maybeSingle();
 
-    // Always return success — never reveal whether the email exists
+    // Return a clear error if the email is not registered
     if (!profile) {
-      return NextResponse.json({ success: true });
+      return NextResponse.json(
+        { error: 'Email is not registered. Please check your email or contact the system administrator.' },
+        { status: 400 }
+      );
     }
 
     // Rate limit: max 5 requests per hour per user

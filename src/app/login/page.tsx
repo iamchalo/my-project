@@ -372,7 +372,7 @@ export default function LoginPage() {
                 </div>
                 <h2 className="text-lg font-semibold">Check your email</h2>
                 <p className="text-sm text-muted-foreground">
-                  If <strong>{modalEmail}</strong> is registered, a reset link has been sent.
+                  A password reset link has been sent to <strong>{modalEmail}</strong>.
                   The link expires in <strong>15 minutes</strong>.
                 </p>
                 <Button className="w-full mt-2" onClick={() => setShowForgotModal(false)}>
