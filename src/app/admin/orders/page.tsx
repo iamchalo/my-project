@@ -33,11 +33,10 @@ interface Order {
 }
 
 interface OrderItem {
-  id: string;
   product_name: string;
   product_price: number;
   quantity: number;
-  subtotal: number;
+  subtotal: number; // computed: product_price * quantity
 }
 
 interface Branch {
@@ -179,16 +178,26 @@ export default function AdminOrdersPage() {
   };
 
   const fetchOrderItems = async (orderId: string) => {
-    if (orderItems[orderId]) return; // Already fetched
+    if (orderItems[orderId] !== undefined) return; // Already fetched
 
     const { data, error } = await supabase
       .from('order_items')
-      .select('id, product_name, product_price, quantity, subtotal')
+      .select('product_name, product_price, quantity')
       .eq('order_id', orderId);
 
-    if (!error && data) {
-      setOrderItems((prev) => ({ ...prev, [orderId]: data }));
+    if (error) {
+      console.error('Error fetching order items:', error);
+      setOrderItems((prev) => ({ ...prev, [orderId]: [] }));
+      return;
     }
+
+    const items: OrderItem[] = (data || []).map((item: any) => ({
+      product_name: item.product_name,
+      product_price: item.product_price,
+      quantity: item.quantity,
+      subtotal: item.product_price * item.quantity,
+    }));
+    setOrderItems((prev) => ({ ...prev, [orderId]: items }));
   };
 
   const toggleOrderExpand = async (orderId: string) => {
@@ -472,7 +481,7 @@ export default function AdminOrdersPage() {
                                   </div>
                                   <div>
                                     <p className="font-medium mb-2">Order Items</p>
-                                    {orderItems[order.id] ? (
+                                    {orderItems[order.id] !== undefined ? (
                                       <div className="bg-background rounded-lg border overflow-hidden">
                                         <table className="w-full text-sm">
                                           <thead>
@@ -484,8 +493,8 @@ export default function AdminOrdersPage() {
                                             </tr>
                                           </thead>
                                           <tbody>
-                                            {orderItems[order.id].map((item) => (
-                                              <tr key={item.id} className="border-b last:border-0">
+                                            {orderItems[order.id].map((item, idx) => (
+                                              <tr key={`${item.product_name}-${idx}`} className="border-b last:border-0">
                                                 <td className="py-2 px-3">{item.product_name}</td>
                                                 <td className="py-2 px-3 text-right">{formatCurrency(item.product_price)}</td>
                                                 <td className="py-2 px-3 text-right">{item.quantity}</td>
