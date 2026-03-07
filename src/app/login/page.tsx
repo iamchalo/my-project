@@ -42,6 +42,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeSessionBlocked, setActiveSessionBlocked] = useState(false);
 
   // Forgot password modal state
   const [showForgotModal,   setShowForgotModal]   = useState(false);
@@ -80,6 +81,15 @@ export default function LoginPage() {
     }
   };
 
+  // Show message if user was kicked from another session
+  useEffect(() => {
+    const msg = sessionStorage.getItem('pos-session-kicked');
+    if (msg) {
+      sessionStorage.removeItem('pos-session-kicked');
+      showNotification('error', msg);
+    }
+  }, []);
+
   // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user && profile) {
@@ -110,6 +120,43 @@ export default function LoginPage() {
     }
   }, [user, profile, authLoading]);
 
+  const handleForceLogin = async () => {
+    if (!email || !password) {
+      showNotification('error', 'Please enter both email and password');
+      return;
+    }
+    setIsSubmitting(true);
+    showNotification('loading', 'Ending previous session and signing in...');
+    try {
+      const { error, profile: userProfile } = await signIn(email, password, true);
+      if (error) {
+        showNotification('error', `Sign in failed: ${error.message}`);
+        setIsSubmitting(false);
+        return;
+      }
+      setActiveSessionBlocked(false);
+      if (userProfile?.role) {
+        if (!userProfile.is_active) {
+          await signOut();
+          showNotification('error', 'Your account has been deactivated. Please contact admin.');
+          setIsSubmitting(false);
+          return;
+        }
+        showNotification('success', 'Previous session ended. Signing in...');
+        const roleRoutes: Record<string, string> = {
+          cashier: '/cashier', manager: '/manager', admin: '/admin', superadmin: '/superadmin',
+        };
+        window.location.href = roleRoutes[userProfile.role] || '/cashier';
+      } else {
+        showNotification('error', 'Profile not found. Please contact admin.');
+        setIsSubmitting(false);
+      }
+    } catch {
+      showNotification('error', 'An unexpected error occurred');
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -126,13 +173,19 @@ export default function LoginPage() {
 
       if (error) {
         // Check for specific error types
-        if (error.message.includes('Invalid login credentials')) {
+        if (error.message === 'ACTIVE_SESSION_EXISTS') {
+          setActiveSessionBlocked(true);
+          showNotification('error', 'This account already has an active session on another device.');
+          setIsSubmitting(false);
+          return;
+        } else if (error.message.includes('Invalid login credentials')) {
           showNotification('error', 'Invalid email or password');
         } else if (error.message.includes('Email not confirmed')) {
           showNotification('error', 'Please confirm your email address');
         } else {
           showNotification('error', `Sign in failed: ${error.message}`);
         }
+        setActiveSessionBlocked(false);
         setIsSubmitting(false);
       } else {
         // Direct redirect based on profile role
@@ -308,6 +361,25 @@ export default function LoginPage() {
                 </>
               )}
             </Button>
+
+            {activeSessionBlocked && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleForceLogin}
+                disabled={isSubmitting}
+                className="w-full gap-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Ending session...
+                  </>
+                ) : (
+                  'End Previous Session & Log In Here'
+                )}
+              </Button>
+            )}
           </form>
 
           {/* Divider */}

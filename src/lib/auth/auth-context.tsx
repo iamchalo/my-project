@@ -4,6 +4,8 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
+const SESSION_ID_KEY = 'pos-session-id';
+
 interface Profile {
   id: string;
   email: string;
@@ -13,6 +15,7 @@ interface Profile {
   avatar_url: string | null;
   phone: string | null;
   is_active: boolean;
+  active_session_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -21,7 +24,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null; profile: Profile | null }>;
+  signIn: (email: string, password: string, forceSession?: boolean) => Promise<{ error: Error | null; profile: Profile | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -66,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, created_at, updated_at')
+        .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, active_session_id, created_at, updated_at')
         .eq('id', userId)
         .single();
 
@@ -106,6 +109,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user) {
           setUser(session.user);
           await fetchProfile(session.user.id);
+          // Validate session nonce on page load (INITIAL_SESSION)
+          if (event === 'INITIAL_SESSION') {
+            const localSessionId = localStorage.getItem(SESSION_ID_KEY);
+            if (localSessionId) {
+              try {
+                const { data: dbSessionId } = await supabase.rpc('get_active_session_id');
+                if (dbSessionId && dbSessionId !== localSessionId) {
+                  sessionStorage.setItem('pos-session-kicked', 'Your session was ended because your account was signed in from another location.');
+                  localStorage.removeItem(SESSION_ID_KEY);
+                  await supabase.auth.signOut();
+                  setUser(null);
+                  setProfile(null);
+                  setLoading(false);
+                  window.location.href = '/login';
+                  return;
+                }
+              } catch {
+                // Don't kick on transient network errors
+              }
+            }
+          }
         } else {
           setUser(null);
           setProfile(null);
@@ -121,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Sign in function
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, forceSession?: boolean) => {
     try {
       // Don't set global loading here — the login page has its own isSubmitting
       // state. Setting loading=true would flip authLoading, causing the login
@@ -142,13 +166,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fetch profile and store it
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, created_at, updated_at')
+          .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, active_session_id, created_at, updated_at')
           .eq('id', data.user.id)
           .single();
 
         if (profileError) {
           console.error('Profile fetch error in signIn:', profileError);
         } else {
+          // Check if another session is already active
+          if (profileData.active_session_id && !forceSession) {
+            // Another session is active — block this login
+            await supabase.auth.signOut();
+            setUser(null);
+            setProfile(null);
+            return { error: { message: 'ACTIVE_SESSION_EXISTS' } as Error, profile: null };
+          }
+
+          // Generate session nonce, store in DB + localStorage
+          const sessionId = crypto.randomUUID();
+          localStorage.setItem(SESSION_ID_KEY, sessionId);
+          await supabase.rpc('set_active_session', { p_session_id: sessionId });
+
           userProfile = profileData;
           setProfile(profileData);
           // Tell onAuthStateChange to skip its redundant fetch (ref, not state,
@@ -174,11 +212,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (user && profile) {
         await writeAuthLog(user.id, profile.full_name, profile.role, profile.branch_id, 'logout');
       }
+      try { await supabase.rpc('clear_active_session'); } catch {}
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);
-      // Clear cached form data on logout
+      // Clear cached form data and session nonce on logout
       localStorage.removeItem('salesStockForm');
+      localStorage.removeItem(SESSION_ID_KEY);
     } catch (error) {
       console.error('Sign out error:', error);
     } finally {
@@ -192,6 +232,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await fetchProfile(user.id);
     }
   };
+
+  // Force sign-out with a reason message (used when session is invalidated)
+  const forceSignOut = (reason: string) => {
+    sessionStorage.setItem('pos-session-kicked', reason);
+    localStorage.removeItem(SESSION_ID_KEY);
+    supabase.auth.signOut().finally(() => {
+      window.location.href = '/login';
+    });
+  };
+
+  // Validate that this browser's session nonce matches the DB
+  const validateSession = async (): Promise<boolean> => {
+    try {
+      const localSessionId = localStorage.getItem(SESSION_ID_KEY);
+      if (!localSessionId) {
+        forceSignOut('Your session could not be verified. Please sign in again.');
+        return false;
+      }
+      const { data: dbSessionId, error } = await supabase.rpc('get_active_session_id');
+      if (error) {
+        // Network error — don't kick for transient failures
+        console.warn('Session validation failed (network):', error);
+        return true;
+      }
+      if (dbSessionId !== localSessionId) {
+        forceSignOut('Your session was ended because your account was signed in from another location.');
+        return false;
+      }
+      return true;
+    } catch {
+      // Treat errors as valid to avoid kicking on transient failures
+      return true;
+    }
+  };
+
+  // Validate session on tab focus (catches stale tabs after force-login on another device)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        validateSession();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
 
   const value: AuthContextType = {
     user,
