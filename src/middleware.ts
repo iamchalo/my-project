@@ -96,7 +96,15 @@ export async function middleware(request: NextRequest) {
   );
 
   if (isPublic) {
-    // An authenticated user on a public route gets redirected to their dashboard.
+    // Reset-password pages must always be accessible — even with an active session —
+    // because the user arrives here via an emailed link to change their password.
+    const isResetPath = pathname === '/reset-password' ||
+      pathname.startsWith('/reset-password/') ||
+      pathname === '/auth/reset-password' ||
+      pathname.startsWith('/auth/reset-password/');
+    if (isResetPath) return response;
+
+    // An authenticated user on any other public route gets redirected to their dashboard.
     if (userId) {
       const cachedRole = request.cookies.get('pos-role')?.value as UserRole | undefined;
       if (cachedRole && ROLE_HOME[cachedRole]) {
