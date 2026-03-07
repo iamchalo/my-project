@@ -47,7 +47,7 @@ export function ReceiptPreview({
       {/* Header */}
       <div className="bg-gray-900 text-white text-center py-3 px-4 space-y-0.5">
         <p className="text-base font-bold tracking-widest uppercase">{branchName}</p>
-        <p className="text-[10px] text-gray-400 tracking-wide">Point of Sale Receipt</p>
+        {branchPhone && <p className="text-[10px] text-gray-300 tracking-wide">{branchPhone}</p>}
       </div>
 
       <div className="px-4 py-3 space-y-1">
@@ -144,7 +144,6 @@ export function ReceiptPreview({
         <div className="text-center text-gray-500 text-[10px] space-y-0.5 pt-1 pb-2">
           <p className="font-semibold text-black">Thank you for your order!</p>
           <p>Please come again</p>
-          {branchPhone && <p className="text-black">Tel: {branchPhone}</p>}
           <p className="mt-1 text-gray-400">** RECEIPT PREVIEW **</p>
         </div>
       </div>
