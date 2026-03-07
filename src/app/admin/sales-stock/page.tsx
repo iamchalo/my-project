@@ -78,7 +78,7 @@ interface DailySummary {
 }
 
 export default function AdminSalesStockPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -91,9 +91,10 @@ export default function AdminSalesStockPage() {
   const [dailySummaries, setDailySummaries] = useState<DailySummary[]>([]);
 
   useEffect(() => {
+    if (authLoading) return;
     supabase.from('branches').select('id, name').order('name')
       .then(({ data }) => { if (data) setBranches(data); });
-  }, []);
+  }, [authLoading]);
 
   const fetchRecords = async () => {
     try {
@@ -178,7 +179,7 @@ export default function AdminSalesStockPage() {
     }
   };
 
-  useEffect(() => { fetchRecords(); }, [selectedDate, selectedBranch]);
+  useEffect(() => { if (!authLoading) fetchRecords(); }, [authLoading, selectedDate, selectedBranch]);
 
   const fetchStockCounts = async (shiftId: string) => {
     if (stockCounts[shiftId] !== undefined) return;

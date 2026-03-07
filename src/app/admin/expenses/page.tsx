@@ -35,7 +35,7 @@ interface Branch {
 }
 
 export default function AdminExpensesPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -54,6 +54,7 @@ export default function AdminExpensesPage() {
 
   // Fetch branches
   useEffect(() => {
+    if (authLoading) return;
     const fetchBranches = async () => {
       try {
         const { data, error } = await supabase
@@ -70,7 +71,7 @@ export default function AdminExpensesPage() {
     };
 
     fetchBranches();
-  }, []);
+  }, [authLoading]);
 
   // Fetch expenses
   const fetchExpenses = async () => {
@@ -170,8 +171,8 @@ export default function AdminExpensesPage() {
   };
 
   useEffect(() => {
-    fetchExpenses();
-  }, [selectedDate, selectedBranch, selectedShift, selectedCategory]);
+    if (!authLoading) fetchExpenses();
+  }, [authLoading, selectedDate, selectedBranch, selectedShift, selectedCategory]);
 
   // Set up real-time subscription
   useEffect(() => {

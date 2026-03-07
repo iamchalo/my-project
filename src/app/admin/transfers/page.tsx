@@ -57,7 +57,7 @@ const inputCls = 'px-3 py-2 border rounded-lg bg-background text-sm focus:outlin
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminTransfersPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
@@ -133,6 +133,7 @@ export default function AdminTransfersPage() {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     const init = async () => {
       setLoading(true);
       await Promise.all([fetchBranches(), fetchTransfers()]);
@@ -146,7 +147,7 @@ export default function AdminTransfersPage() {
       .subscribe();
 
     return () => { sub.unsubscribe(); };
-  }, []);
+  }, [authLoading]);
 
   // ─── Filter + Sort ──────────────────────────────────────────────────────────
 

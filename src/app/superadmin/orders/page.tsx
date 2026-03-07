@@ -54,7 +54,7 @@ interface Stats {
 }
 
 export default function AdminOrdersPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -210,14 +210,14 @@ export default function AdminOrdersPage() {
   };
 
   useEffect(() => {
-    fetchBranches();
-  }, []);
+    if (!authLoading) fetchBranches();
+  }, [authLoading]);
 
   useEffect(() => {
-    if (fromDate && toDate) {
+    if (!authLoading && fromDate && toDate) {
       fetchOrders();
     }
-  }, [fromDate, toDate, selectedBranch, selectedPayment]);
+  }, [authLoading, fromDate, toDate, selectedBranch, selectedPayment]);
 
   const handleSearch = () => {
     fetchOrders();

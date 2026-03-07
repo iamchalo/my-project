@@ -19,7 +19,7 @@ interface AuthLog {
 }
 
 export default function SuperadminLogsPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading]           = useState(true);
@@ -28,7 +28,7 @@ export default function SuperadminLogsPage() {
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [selectedRole, setSelectedRole]     = useState<string>('all');
 
-  useEffect(() => { fetchLogs(); }, [selectedDate, selectedAction, selectedRole]);
+  useEffect(() => { if (!authLoading) fetchLogs(); }, [authLoading, selectedDate, selectedAction, selectedRole]);
 
   const fetchLogs = async () => {
     try {

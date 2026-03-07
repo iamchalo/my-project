@@ -76,7 +76,7 @@ interface TopPerformer {
 }
 
 export default function SuperadminDashboard() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -275,8 +275,8 @@ export default function SuperadminDashboard() {
   };
 
   useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    if (!authLoading) fetchDashboardData();
+  }, [authLoading]);
 
   const formatCurrency = (amount: number) => {
     return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;

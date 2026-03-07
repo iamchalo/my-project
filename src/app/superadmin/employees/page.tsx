@@ -60,7 +60,7 @@ const inputCls = 'w-full px-3 py-2 border rounded-lg bg-background text-sm focus
 const labelCls = 'text-xs font-medium text-muted-foreground mb-1 block';
 
 export default function SuperadminEmployeesPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -93,14 +93,16 @@ export default function SuperadminEmployeesPage() {
   const set = (field: string, value: any) => setFormData(prev => ({ ...prev, [field]: value }));
 
   useEffect(() => {
+    if (authLoading) return;
     const fetchBranches = async () => {
       const { data } = await supabase.from('branches').select('id, name').eq('is_active', true).order('name');
       setBranches(data || []);
     };
     fetchBranches();
-  }, []);
+  }, [authLoading]);
 
   const fetchStaff = useCallback(async () => {
+    if (authLoading) return;
     setLoading(true);
     try {
       let query = supabase
@@ -128,7 +130,7 @@ export default function SuperadminEmployeesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedBranch, selectedType, selectedStatus]);
+  }, [authLoading, selectedBranch, selectedType, selectedStatus]);
 
   useEffect(() => { fetchStaff(); }, [fetchStaff]);
 

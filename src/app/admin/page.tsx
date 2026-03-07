@@ -89,7 +89,7 @@ function CustomTooltip({ active, payload, label }: any) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminDashboard() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [loading, setLoading] = useState(true);
@@ -222,7 +222,7 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { handleRefresh(); }, []);
+  useEffect(() => { if (!authLoading) handleRefresh(); }, [authLoading]);
 
   const handleRangeChange = (r: '7d' | '30d' | '90d') => {
     setRange(r);
