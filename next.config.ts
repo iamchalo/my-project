@@ -14,9 +14,6 @@ const nextConfig: NextConfig = {
     ],
     formats: ['image/avif', 'image/webp'],
   },
-  experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-avatar', '@radix-ui/react-switch'],
-  },
 };
 
 export default nextConfig;
