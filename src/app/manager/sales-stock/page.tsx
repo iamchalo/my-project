@@ -124,7 +124,7 @@ export default function ManagerSalesStockPage() {
   };
 
   const fetchStockCounts = async (shiftId: string) => {
-    if (stockCounts[shiftId]) return; // Already loaded
+    if (stockCounts[shiftId] !== undefined) return; // Already loaded
 
     try {
       const { data, error } = await supabase
@@ -143,6 +143,7 @@ export default function ManagerSalesStockPage() {
       }));
     } catch (error) {
       console.error('Error fetching stock counts:', error);
+      setStockCounts(prev => ({ ...prev, [shiftId]: [] }));
     }
   };
 
@@ -336,7 +337,7 @@ export default function ManagerSalesStockPage() {
                         {/* Stock Counts */}
                         <div>
                           <h4 className="font-medium mb-2">Stock Counts</h4>
-                          {stockCounts[record.id] ? (
+                          {stockCounts[record.id] !== undefined ? (
                             stockCounts[record.id].length > 0 ? (
                               <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
