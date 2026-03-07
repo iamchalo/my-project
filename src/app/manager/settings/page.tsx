@@ -121,7 +121,9 @@ export default function ManagerSettingsPage() {
             </CardContent>
           </Card>
 
-          <ChangePasswordCard onNotification={showNotification} />
+          {profile?.email && (
+            <ChangePasswordCard email={profile.email} onNotification={showNotification} />
+          )}
 
           {/* Display Settings */}
           <Card>

@@ -144,7 +144,9 @@ export default function SuperadminSettingsPage() {
             </CardContent>
           </Card>
 
-          <ChangePasswordCard onNotification={showNotification} />
+          {profile?.email && (
+            <ChangePasswordCard email={profile.email} onNotification={showNotification} />
+          )}
 
           <Card>
             <CardHeader>
