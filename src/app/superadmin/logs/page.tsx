@@ -28,21 +28,25 @@ export default function SuperadminLogsPage() {
   const [selectedAction, setSelectedAction] = useState<string>('all');
   const [selectedRole, setSelectedRole]     = useState<string>('all');
 
-  useEffect(() => { fetchLogs(); }, [selectedDate]);
+  useEffect(() => { fetchLogs(); }, [selectedDate, selectedAction, selectedRole]);
 
   const fetchLogs = async () => {
     try {
       setLoading(true);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('auth_logs')
-        .select('*')
+        .select('id, user_id, user_name, role, branch, action, created_at')
         // Superadmins must not see other superadmins' activity
         .neq('role', 'superadmin')
         .gte('created_at', `${selectedDate}T00:00:00`)
         .lte('created_at', `${selectedDate}T23:59:59`)
         .order('created_at', { ascending: false });
 
+      if (selectedAction !== 'all') query = query.eq('action', selectedAction);
+      if (selectedRole !== 'all') query = query.eq('role', selectedRole);
+
+      const { data, error } = await query;
       if (error) throw error;
       setLogs(data || []);
     } catch (error) {
@@ -52,12 +56,7 @@ export default function SuperadminLogsPage() {
     }
   };
 
-  // Client-side filters (action + role applied after fetch)
-  const filteredLogs = logs.filter(log => {
-    if (selectedAction !== 'all' && log.action !== selectedAction) return false;
-    if (selectedRole   !== 'all' && log.role   !== selectedRole)   return false;
-    return true;
-  });
+  const filteredLogs = logs;
 
   const loginCount    = filteredLogs.filter(l => l.action === 'login').length;
   const logoutCount   = filteredLogs.filter(l => l.action === 'logout').length;

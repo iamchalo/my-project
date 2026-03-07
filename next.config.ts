@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+  compress: true,
   images: {
     remotePatterns: [
       {
@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
         pathname: '/storage/v1/object/public/**',
       },
     ],
+    formats: ['image/avif', 'image/webp'],
+  },
+  experimental: {
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-avatar', '@radix-ui/react-switch'],
   },
 };
 

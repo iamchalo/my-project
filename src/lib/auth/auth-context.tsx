@@ -62,10 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Fetch user profile from database
   const fetchProfile = async (userId: string) => {
     try {
-      console.log('Fetching profile for user:', userId);
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, created_at, updated_at')
         .eq('id', userId)
         .single();
 
@@ -73,7 +72,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Profile fetch error:', error);
         throw error;
       }
-      console.log('Profile loaded:', data?.role, data?.full_name);
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
@@ -104,7 +102,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event);
 
         // Skip profile fetch if we just signed in (already fetched in signIn function)
         if (skipNextFetch && event === 'SIGNED_IN') {
@@ -151,21 +148,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(data.user);
         console.log('User signed in:', data.user.id, data.user.email);
 
-        // Fetch profile and store it (removed 100ms delay for better performance)
+        // Fetch profile and store it
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, created_at, updated_at')
           .eq('id', data.user.id)
           .single();
 
         if (profileError) {
           console.error('Profile fetch error in signIn:', profileError);
-          console.error('Error details:', JSON.stringify(profileError));
-          console.error('Attempted to fetch profile for user ID:', data.user.id);
         } else {
           userProfile = profileData;
           setProfile(profileData);
-          console.log('Profile loaded in signIn:', profileData?.role, profileData?.full_name);
           // Skip next auth state change fetch since we just fetched the profile
           setSkipNextFetch(true);
           // Log the login event

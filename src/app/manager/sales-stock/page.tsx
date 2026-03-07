@@ -82,7 +82,7 @@ export default function ManagerSalesStockPage() {
       // Fetch shift reconciliation records for the selected date
       const { data: shiftsData, error: shiftsError } = await supabase
         .from('shifts')
-        .select('*')
+        .select('id, shift_number, shift_date, shift_type, cashier_id, balance_brought_down, mpesa_amount, paybill_amount, expense_total, cash_in_hand, grand_total, denom_1000_qty, denom_1000_total, denom_500_qty, denom_500_total, denom_200_qty, denom_200_total, denom_100_qty, denom_100_total, denom_50_qty, denom_50_total, coins_amount, created_at, started_at, ended_at')
         .eq('branch_id', profile.branch_id)
         .eq('shift_date', selectedDate)
         .eq('is_active', false)

@@ -120,25 +120,21 @@ export default function AdminExpensesPage() {
       const branchIds = [...new Set(expensesData?.map(e => e.branch_id) || [])];
       const cashierIds = [...new Set(expensesData?.map(e => e.cashier_id) || [])];
 
-      // Fetch branch names
-      let branchMap = new Map<string, string>();
-      if (branchIds.length > 0) {
-        const { data: branchData } = await supabase
-          .from('branches')
-          .select('id, name')
-          .in('id', branchIds);
-        branchData?.forEach(b => branchMap.set(b.id, b.name));
-      }
-
-      // Fetch cashier names
-      let cashierMap = new Map<string, string>();
-      if (cashierIds.length > 0) {
-        const { data: cashierData } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', cashierIds);
-        cashierData?.forEach(c => cashierMap.set(c.id, c.full_name));
-      }
+      // Fetch branch and cashier names in parallel
+      const [branchResult, cashierResult] = await Promise.all([
+        branchIds.length > 0
+          ? supabase.from('branches').select('id, name').in('id', branchIds)
+          : Promise.resolve({ data: [] }),
+        cashierIds.length > 0
+          ? supabase.from('profiles').select('id, full_name').in('id', cashierIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const branchMap = new Map<string, string>(
+        (branchResult.data || []).map((b: any) => [b.id, b.name])
+      );
+      const cashierMap = new Map<string, string>(
+        (cashierResult.data || []).map((c: any) => [c.id, c.full_name])
+      );
 
       // Map expenses with names
       const expensesWithNames = expensesData?.map(exp => ({

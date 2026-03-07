@@ -73,7 +73,7 @@ function ManagerInventoryPageContent() {
         // Fetch products for this branch
         const { data: productsData, error: productsError } = await supabase
           .from('products')
-          .select('*')
+          .select('id, product_name, category, product_price, image_url, is_active, branch_id, created_by, created_at, updated_at')
           .eq('branch_id', branchId)
           .order('created_at', { ascending: false });
 

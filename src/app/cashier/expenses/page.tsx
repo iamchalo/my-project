@@ -106,7 +106,7 @@ export default function CashierExpensesPage() {
 
       const { data, error } = await supabase
         .from('expenses')
-        .select('*')
+        .select('id, expense_number, category, description, price, quantity, total, expense_date, created_at')
         .eq('branch_id', profile.branch_id)
         .eq('cashier_id', profile.id)
         .eq('expense_date', currentDate)

@@ -101,7 +101,7 @@ export default function AdminSalesStockPage() {
 
       let query = supabase
         .from('shifts')
-        .select('*')
+        .select('id, shift_number, shift_date, shift_type, branch_id, cashier_id, active_shift_id, balance_brought_down, mpesa_amount, paybill_amount, expense_total, cash_in_hand, grand_total, denom_1000_qty, denom_1000_total, denom_500_qty, denom_500_total, denom_200_qty, denom_200_total, denom_100_qty, denom_100_total, denom_50_qty, denom_50_total, coins_amount, started_at, ended_at, created_at')
         .eq('shift_date', selectedDate)
         .eq('is_active', false)
         .not('shift_number', 'is', null)
@@ -118,16 +118,14 @@ export default function AdminSalesStockPage() {
         return;
       }
 
-      // Fetch branch names
+      // Fetch branch and cashier names in parallel
       const branchIds = [...new Set(shiftsData.map(s => s.branch_id))];
-      const { data: branchData } = await supabase
-        .from('branches').select('id, name').in('id', branchIds);
-      const branchMap = new Map(branchData?.map(b => [b.id, b.name]) || []);
-
-      // Fetch cashier names
       const cashierIds = [...new Set(shiftsData.map(s => s.cashier_id))];
-      const { data: cashierData } = await supabase
-        .from('profiles').select('id, full_name').in('id', cashierIds);
+      const [{ data: branchData }, { data: cashierData }] = await Promise.all([
+        supabase.from('branches').select('id, name').in('id', branchIds),
+        supabase.from('profiles').select('id, full_name').in('id', cashierIds),
+      ]);
+      const branchMap = new Map(branchData?.map(b => [b.id, b.name]) || []);
       const cashierMap = new Map(cashierData?.map(c => [c.id, c.full_name]) || []);
 
       // Fetch chef names via active_shift_id → shift_chef_assignments → employees
