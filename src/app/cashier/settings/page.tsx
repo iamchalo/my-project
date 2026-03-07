@@ -11,7 +11,7 @@ import { ThemeDropdown } from '@/components/ui/theme-dropdown';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function CashierSettingsPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
 
   const [branchName, setBranchName] = useState('');
@@ -33,6 +33,7 @@ export default function CashierSettingsPage() {
 
   // Fetch branch name
   useEffect(() => {
+    if (authLoading) return;
     const fetchBranchName = async () => {
       if (!profile?.branch_id) {
         setLoading(false);
@@ -56,7 +57,7 @@ export default function CashierSettingsPage() {
     };
 
     fetchBranchName();
-  }, [profile?.branch_id]);
+  }, [authLoading, profile?.branch_id]);
 
   // Update form data when profile loads
   useEffect(() => {

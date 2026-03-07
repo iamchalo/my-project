@@ -11,7 +11,7 @@ import { ThemeDropdown } from '@/components/ui/theme-dropdown';
 import { useNotification } from '@/components/ui/notification';
 
 export default function ManagerSettingsPage() {
-  const { profile } = useAuth();
+  const { profile, loading: authLoading } = useAuth();
   const supabase = createClient();
   const { showNotification } = useNotification();
   const [branchName, setBranchName] = useState('');
@@ -58,6 +58,7 @@ export default function ManagerSettingsPage() {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     const fetchBranchName = async () => {
       if (!profile?.branch_id) {
         setLoading(false);
@@ -81,9 +82,9 @@ export default function ManagerSettingsPage() {
     };
 
     fetchBranchName();
-  }, [profile?.branch_id]);
+  }, [authLoading, profile?.branch_id]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <DashboardLayout userName={profile?.full_name || 'Manager'} userRole="manager">
         <div className="flex items-center justify-center h-full">
@@ -117,8 +118,8 @@ export default function ManagerSettingsPage() {
                   <label className="text-sm font-medium mb-2 block">Full Name</label>
                   <input
                     type="text"
-                    defaultValue={profile?.full_name || ''}
-                    disabled
+                    value={profile?.full_name || ''}
+                    readOnly
                     className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
                   />
                 </div>
@@ -126,8 +127,8 @@ export default function ManagerSettingsPage() {
                   <label className="text-sm font-medium mb-2 block">Email Address</label>
                   <input
                     type="email"
-                    defaultValue={profile?.email || ''}
-                    disabled
+                    value={profile?.email || ''}
+                    readOnly
                     className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
                   />
                 </div>
@@ -139,8 +140,8 @@ export default function ManagerSettingsPage() {
                   </label>
                   <input
                     type="tel"
-                    defaultValue={profile?.phone || ''}
-                    disabled
+                    value={profile?.phone || ''}
+                    readOnly
                     className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
                   />
                 </div>
@@ -150,8 +151,8 @@ export default function ManagerSettingsPage() {
                   </label>
                   <input
                     type="text"
-                    defaultValue={branchName}
-                    disabled
+                    value={branchName}
+                    readOnly
                     className="w-full px-4 py-2 border rounded-lg bg-gray-100 dark:bg-gray-800 cursor-not-allowed"
                   />
                 </div>

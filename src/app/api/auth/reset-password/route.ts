@@ -46,16 +46,16 @@ export async function POST(req: NextRequest) {
     );
     if (updateError) throw updateError;
 
-    // Mark token used + invalidate all other tokens for this user
-    await consumeResetToken(token, validation.userId!);
-
-    // Audit log
-    await supabase.from('password_change_logs').insert({
-      user_id:    validation.userId,
-      event_type: 'success',
-      ip_address: req.headers.get('x-forwarded-for') ?? null,
-      user_agent: req.headers.get('user-agent') ?? null,
-    });
+    // Consume token and write audit log in parallel — neither depends on the other
+    await Promise.all([
+      consumeResetToken(token, validation.userId!),
+      supabase.from('password_change_logs').insert({
+        user_id:    validation.userId,
+        event_type: 'success',
+        ip_address: req.headers.get('x-forwarded-for') ?? null,
+        user_agent: req.headers.get('user-agent') ?? null,
+      }),
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

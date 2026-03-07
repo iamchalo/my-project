@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { createClient } from '@/lib/supabase/client';
 
@@ -32,7 +32,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [skipNextFetch, setSkipNextFetch] = useState(false);
+  // useRef instead of useState: refs are mutable and always current inside
+  // closures, so the onAuthStateChange callback reads the latest value.
+  const skipNextFetchRef = useRef(false);
   const supabase = createClient();
 
   // Write a login/logout entry to auth_logs (non-fatal — errors are swallowed)
@@ -79,43 +81,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Initialize auth state
+  // Initialize auth state — use onAuthStateChange as the single source of truth.
+  // It fires INITIAL_SESSION immediately on setup with the current session,
+  // which correctly handles page refreshes without a separate initAuth() race.
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        // Get current session
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          setUser(session.user);
-          await fetchProfile(session.user.id);
-        }
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initAuth();
-
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Skip redundant profile fetch right after signIn() already fetched it.
+        // Uses a ref (not state) so the callback always reads the latest value.
+        if (skipNextFetchRef.current && event === 'SIGNED_IN') {
+          skipNextFetchRef.current = false;
+          setLoading(false);
+          return;
+        }
 
-        // Skip profile fetch if we just signed in (already fetched in signIn function)
-        if (skipNextFetch && event === 'SIGNED_IN') {
-          setSkipNextFetch(false);
+        // PASSWORD_RECOVERY sessions don't need a profile — the user is only
+        // here to set a new password and will be redirected to login afterwards.
+        if (event === 'PASSWORD_RECOVERY') {
+          if (session?.user) setUser(session.user);
           setLoading(false);
           return;
         }
 
         if (session?.user) {
           setUser(session.user);
-          // Only fetch profile if we don't already have it or user changed
-          if (!profile || profile.id !== session.user.id) {
-            await fetchProfile(session.user.id);
-          }
+          await fetchProfile(session.user.id);
         } else {
           setUser(null);
           setProfile(null);
@@ -133,7 +123,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Sign in function
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true);
+      // Don't set global loading here — the login page has its own isSubmitting
+      // state. Setting loading=true would flip authLoading, causing the login
+      // page to swap the form for skeletons.
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -146,7 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         setUser(data.user);
-        console.log('User signed in:', data.user.id, data.user.email);
 
         // Fetch profile and store it
         const { data: profileData, error: profileError } = await supabase
@@ -160,10 +151,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           userProfile = profileData;
           setProfile(profileData);
-          // Skip next auth state change fetch since we just fetched the profile
-          setSkipNextFetch(true);
-          // Log the login event
-          await writeAuthLog(data.user.id, profileData.full_name, profileData.role, profileData.branch_id, 'login');
+          // Tell onAuthStateChange to skip its redundant fetch (ref, not state,
+          // so the callback always reads the current value).
+          skipNextFetchRef.current = true;
+          // Fire-and-forget: don't block login on audit logging
+          writeAuthLog(data.user.id, profileData.full_name, profileData.role, profileData.branch_id, 'login');
         }
       }
 
@@ -171,8 +163,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error('Sign in error:', error);
       return { error, profile: null };
-    } finally {
-      setLoading(false);
     }
   };
 

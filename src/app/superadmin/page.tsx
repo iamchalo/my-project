@@ -680,46 +680,7 @@ export default function SuperadminDashboard() {
             </Card>
           </div>
 
-          {/* System Health */}
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <DatabaseIcon className="h-5 w-5 text-muted-foreground" />
-                <CardTitle className="text-lg">System Health</CardTitle>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">Database</span>
-                    <span className="font-medium text-green-600">Connected</span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: '100%' }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">Active Branches</span>
-                    <span className="font-medium text-green-600">{stats?.activeBranches || 0}/{stats?.totalBranches || 0}</span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${stats?.totalBranches ? (stats.activeBranches / stats.totalBranches) * 100 : 0}%` }} />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-muted-foreground">Active Users</span>
-                    <span className="font-medium text-green-600">{stats?.activeEmployees || 0}/{stats?.totalEmployees || 0}</span>
-                  </div>
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div className="bg-green-500 h-2 rounded-full" style={{ width: `${stats?.totalEmployees ? (stats.activeEmployees / stats.totalEmployees) * 100 : 0}%` }} />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* System Health removed */}
         </div>
       </div>
     </DashboardLayout>

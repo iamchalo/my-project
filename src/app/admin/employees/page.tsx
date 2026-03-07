@@ -282,6 +282,11 @@ export default function AdminEmployeesPage() {
   const nonPosCount = staff.filter(s => !s.has_pos_account).length;
 
   const userRole = (profile?.role === 'superadmin' ? 'superadmin' : 'admin') as 'admin' | 'superadmin';
+  // Only superadmin can see full name and phone at full contrast and edit them
+  const isSuperadmin = profile?.role === 'superadmin';
+  const sensitiveFieldCls = !isSuperadmin
+    ? 'opacity-50 select-none pointer-events-none'
+    : '';
 
   // ── Shared form fields ──────────────────────────────────────────────────────
   const renderFormFields = (isEdit: boolean) => (
@@ -292,8 +297,11 @@ export default function AdminEmployeesPage() {
         <div className="grid grid-cols-1 gap-3">
           <div>
             <label className={labelCls}>Full Name *</label>
-            <input type="text" value={formData.full_name} onChange={e => set('full_name', e.target.value)}
-              placeholder="e.g., John Doe" className={inputCls} />
+            {/* Full Name is read-only for non-superadmin; only superadmin may edit sensitive PII */}
+            <input type="text" value={formData.full_name} onChange={e => isSuperadmin ? set('full_name', e.target.value) : undefined}
+              readOnly={!isSuperadmin}
+              placeholder="e.g., John Doe"
+              className={!isSuperadmin ? `${inputCls} opacity-50 bg-muted cursor-not-allowed` : inputCls} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -354,8 +362,11 @@ export default function AdminEmployeesPage() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelCls}>Phone</label>
-            <input type="tel" value={formData.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="e.g., 0712345678" className={inputCls} />
+            {/* Phone is read-only for non-superadmin; only superadmin may edit sensitive PII */}
+            <input type="tel" value={formData.phone} onChange={e => isSuperadmin ? set('phone', e.target.value) : undefined}
+              readOnly={!isSuperadmin}
+              placeholder="e.g., 0712345678"
+              className={!isSuperadmin ? `${inputCls} opacity-50 bg-muted cursor-not-allowed` : inputCls} />
           </div>
           <div>
             <label className={labelCls}>Email{formData.has_pos_account && !isEdit ? ' *' : ''}</label>
@@ -556,7 +567,8 @@ export default function AdminEmployeesPage() {
                   ) : staff.map(record => (
                     <tr key={record.id} className="border-b hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3">
-                        <div className="font-medium">{record.full_name}</div>
+                        {/* Full Name: greyed out for non-superadmin */}
+                        <div className={`font-medium ${sensitiveFieldCls}`}>{record.full_name}</div>
                         <div className="text-xs text-muted-foreground">{record.job_title}</div>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">{record.branch_name}</td>
@@ -569,7 +581,8 @@ export default function AdminEmployeesPage() {
                           <Badge variant="secondary" className="text-xs">Non-POS</Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{record.phone || '—'}</td>
+                      {/* Phone: greyed out for non-superadmin */}
+                      <td className={`px-4 py-3 text-muted-foreground ${sensitiveFieldCls}`}>{record.phone || '—'}</td>
                       <td className="px-4 py-3 text-muted-foreground">
                         {record.date_of_reporting
                           ? new Date(record.date_of_reporting).toLocaleDateString('en-KE', { timeZone: 'Africa/Nairobi' })

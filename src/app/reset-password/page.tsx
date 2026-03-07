@@ -21,26 +21,28 @@ export default function ResetPasswordPage() {
   const [validatingToken, setValidatingToken] = useState(true);
 
   useEffect(() => {
-    // Check if we have a valid session (from the reset link)
-    const checkSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-
-        if (error || !session) {
-          setError('Invalid or expired reset link. Please request a new password reset.');
+    // Use onAuthStateChange instead of getSession() to reliably detect the
+    // recovery session. getSession() can race against SDK hash-fragment
+    // processing and return null prematurely.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'PASSWORD_RECOVERY' && session) {
+          // Recovery token exchanged successfully — show the form
           setValidatingToken(false);
-          return;
+        } else if (event === 'INITIAL_SESSION') {
+          // SDK finished initialising: if there's a session it's valid,
+          // if not the link was expired/invalid.
+          if (session) {
+            setValidatingToken(false);
+          } else {
+            setError('Invalid or expired reset link. Please request a new password reset.');
+            setValidatingToken(false);
+          }
         }
-
-        setValidatingToken(false);
-      } catch (err) {
-        console.error('Error checking session:', err);
-        setError('Failed to validate reset link');
-        setValidatingToken(false);
       }
-    };
+    );
 
-    checkSession();
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

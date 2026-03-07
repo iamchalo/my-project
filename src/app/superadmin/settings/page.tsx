@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,11 +17,17 @@ export default function SuperadminSettingsPage() {
   const [sendingResetEmail, setSendingResetEmail] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Form state
-  const [formData, setFormData] = useState({
-    full_name: profile?.full_name || '',
-    phone: profile?.phone || '',
-  });
+  // Form state — initialised empty; synced from profile once it loads
+  const [formData, setFormData] = useState({ full_name: '', phone: '' });
+
+  useEffect(() => {
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name || '',
+        phone: profile.phone || '',
+      });
+    }
+  }, [profile]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -205,13 +211,6 @@ export default function SuperadminSettingsPage() {
                   <p className="text-sm text-muted-foreground">Minimum 6 characters required</p>
                 </div>
                 <Button variant="outline">Configure</Button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">Two-Factor Authentication</p>
-                  <p className="text-sm text-muted-foreground">Enforce 2FA for all admin accounts</p>
-                </div>
-                <Button variant="outline">Manage</Button>
               </div>
               <div className="flex items-center justify-between">
                 <div>

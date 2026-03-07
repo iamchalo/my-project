@@ -93,19 +93,13 @@ export async function validateResetToken(
 }
 
 /**
- * Marks the used token and invalidates all other tokens for the same user.
- * Call only after password update succeeds.
+ * Marks all tokens for this user as used (including the current one).
+ * A single query replaces the two sequential updates — the second update
+ * already covers the first since it targets all unused tokens for the user.
  */
-export async function consumeResetToken(raw: string, userId: string): Promise<void> {
-  const supabase  = createAdminClient();
-  const tokenHash = await hashToken(raw);
+export async function consumeResetToken(_raw: string, userId: string): Promise<void> {
+  const supabase = createAdminClient();
 
-  await supabase
-    .from('password_reset_tokens')
-    .update({ used: true })
-    .eq('token_hash', tokenHash);
-
-  // Invalidate any remaining tokens for the user
   await supabase
     .from('password_reset_tokens')
     .update({ used: true })
