@@ -11,6 +11,14 @@ interface ReceiptPreviewProps {
   cashierName?: string;
 }
 
+const BRANCH_PHONES: Record<string, string> = {
+  KFries: '0755640640',
+  BeFries: '0783797979',
+  StageBeFries: '0796797979',
+  MigFries: '07',
+  LFries: '0738797979',
+};
+
 const Divider = ({ dashed = false }: { dashed?: boolean }) => (
   <div className={`border-t my-2 ${dashed ? 'border-dashed border-gray-400' : 'border-gray-300'}`} />
 );
@@ -22,6 +30,7 @@ export function ReceiptPreview({
   branchName = 'KFries POS',
   cashierName,
 }: ReceiptPreviewProps) {
+  const branchPhone = branchName ? BRANCH_PHONES[branchName] : undefined;
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-KE', {
     timeZone: 'Africa/Nairobi',
@@ -135,6 +144,7 @@ export function ReceiptPreview({
         <div className="text-center text-gray-500 text-[10px] space-y-0.5 pt-1 pb-2">
           <p className="font-semibold text-black">Thank you for your order!</p>
           <p>Please come again</p>
+          {branchPhone && <p className="text-black">Tel: {branchPhone}</p>}
           <p className="mt-1 text-gray-400">** RECEIPT PREVIEW **</p>
         </div>
       </div>

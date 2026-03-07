@@ -33,6 +33,7 @@ export default function CashierOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<'cash' | 'mpesa' | null>(null);
+  const [branchName, setBranchName] = useState<string | undefined>(undefined);
 
   // Fetch products from the database (using new centralized schema)
   useEffect(() => {
@@ -70,7 +71,17 @@ export default function CashierOrdersPage() {
       }
     };
 
+    const fetchBranchName = async () => {
+      const { data } = await supabase
+        .from('branches')
+        .select('name')
+        .eq('id', profile.branch_id)
+        .single();
+      if (data?.name) setBranchName(data.name);
+    };
+
     fetchProducts();
+    fetchBranchName();
   }, [profile?.branch_id, supabase, showNotification]);
 
   // Add product to cart
@@ -290,6 +301,7 @@ export default function CashierOrdersPage() {
                   items={cartItems}
                   total={total}
                   paymentMethod={selectedPayment}
+                  branchName={branchName}
                   cashierName={profile?.full_name}
                 />
                 <Button
