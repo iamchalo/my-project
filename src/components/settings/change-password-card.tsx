@@ -7,20 +7,18 @@ import { createClient } from '@/lib/supabase/client';
 import { KeyIcon, Loader2, CheckCircle2 } from 'lucide-react';
 
 interface ChangePasswordCardProps {
-  email: string;
   onNotification: (type: 'success' | 'error', message: string) => void;
 }
 
-export function ChangePasswordCard({ email, onNotification }: ChangePasswordCardProps) {
+export function ChangePasswordCard({ onNotification }: ChangePasswordCardProps) {
   const supabase = createClient();
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changing, setChanging] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
+    if (!newPassword || !confirmPassword) {
       onNotification('error', 'Please fill in all password fields');
       return;
     }
@@ -35,27 +33,10 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
       return;
     }
 
-    if (currentPassword === newPassword) {
-      onNotification('error', 'New password must be different from current password');
-      return;
-    }
-
     try {
       setChanging(true);
       setSuccess(false);
 
-      // Verify current password
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email,
-        password: currentPassword,
-      });
-
-      if (verifyError) {
-        onNotification('error', 'Current password is incorrect');
-        return;
-      }
-
-      // Update to new password
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -63,7 +44,6 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
       if (updateError) throw updateError;
 
       // Clear form and show success
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       setSuccess(true);
@@ -97,18 +77,6 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
           </div>
         )}
 
-        <div>
-          <label className="text-sm font-medium mb-2 block">Current Password</label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Enter current password"
-            disabled={changing}
-            className="w-full px-4 py-2 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
-            autoComplete="current-password"
-          />
-        </div>
         <div>
           <label className="text-sm font-medium mb-2 block">New Password</label>
           <input

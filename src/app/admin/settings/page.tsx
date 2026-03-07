@@ -144,9 +144,7 @@ export default function AdminSettingsPage() {
             </CardContent>
           </Card>
 
-          {profile?.email && (
-            <ChangePasswordCard email={profile.email} onNotification={showNotification} />
-          )}
+          <ChangePasswordCard onNotification={showNotification} />
 
           <Card>
             <CardHeader>

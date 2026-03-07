@@ -232,9 +232,7 @@ export default function CashierSettingsPage() {
           </Card>
 
           {/* Change Password */}
-          {profile?.email && (
-            <ChangePasswordCard email={profile.email} onNotification={showNotification} />
-          )}
+          <ChangePasswordCard onNotification={showNotification} />
 
           {/* Display Settings */}
           <Card>
