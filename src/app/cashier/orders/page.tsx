@@ -82,7 +82,8 @@ export default function CashierOrdersPage() {
 
     fetchProducts();
     fetchBranchName();
-  }, [profile?.branch_id, supabase, showNotification]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.branch_id]);
 
   // Add product to cart
   const handleAddToOrder = (product: Product) => {
