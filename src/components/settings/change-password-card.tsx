@@ -69,6 +69,9 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
 
       if (updateError) throw updateError;
 
+      onNotification('success', 'Password changed successfully!');
+      await new Promise(r => setTimeout(r, 1500));
+
       // Password changed — clear the active session nonce and sign out globally
       try { await supabase.rpc('clear_active_session'); } catch {}
       localStorage.removeItem('pos-session-id');
