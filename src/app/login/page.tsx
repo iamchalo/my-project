@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/auth-context';
+import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Notification, useNotification } from '@/components/ui/notification';
@@ -35,6 +36,7 @@ function isMobileDevice(): boolean {
 export default function LoginPage() {
   const router = useRouter();
   const { signIn, signOut, user, profile, loading: authLoading } = useAuth();
+  const supabase = createClient();
   const { notification, showNotification, hideNotification } = useNotification();
 
   const [email, setEmail] = useState('');
@@ -63,16 +65,16 @@ export default function LoginPage() {
     setResetSending(true);
     setResetError('');
     try {
-      const res  = await fetch('/api/auth/request-reset', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ email: target }),
+      // Use Supabase's built-in password reset — no external email service needed.
+      // Supabase always returns success (even for unregistered emails) to prevent
+      // email enumeration attacks, so we show a success message regardless.
+      const { error } = await supabase.auth.resetPasswordForEmail(target, {
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin}/reset-password`,
       });
-      const data = await res.json();
-      if (!res.ok && data.error) { setResetError(data.error); return; }
+      if (error) throw error;
       setResetSent(true);
-    } catch {
-      setResetError('Network error. Please try again.');
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to send reset email. Please try again.');
     } finally {
       setResetSending(false);
     }
