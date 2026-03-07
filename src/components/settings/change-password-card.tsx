@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { createClient as createRawClient } from '@supabase/supabase-js';
-import { KeyIcon, Loader2 } from 'lucide-react';
+import { KeyIcon, Loader2, CheckIcon } from 'lucide-react';
 
 interface ChangePasswordCardProps {
   email: string;
@@ -18,6 +18,7 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changing, setChanging] = useState(false);
+  const [succeeded, setSucceeded] = useState(false);
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -70,6 +71,8 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
       if (updateError) throw updateError;
 
       onNotification('success', 'Password changed successfully!');
+      setChanging(false);
+      setSucceeded(true);
       await new Promise(r => setTimeout(r, 1500));
 
       // Password changed — clear the active session nonce and sign out globally
@@ -133,7 +136,7 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
 
         <Button
           onClick={handleChangePassword}
-          disabled={changing}
+          disabled={changing || succeeded}
           className="w-full"
           size="lg"
         >
@@ -141,6 +144,11 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
             <>
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
               Changing Password...
+            </>
+          ) : succeeded ? (
+            <>
+              <CheckIcon className="h-4 w-4 mr-2" />
+              Redirecting to login...
             </>
           ) : (
             'Change Password'
