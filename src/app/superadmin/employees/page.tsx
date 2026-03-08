@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import {
   PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon,
   EyeIcon, EyeOffIcon, MonitorIcon, ChefHatIcon,
@@ -30,6 +30,7 @@ interface StaffRecord {
   has_pos_account: boolean;
   pos_profile_id: string | null;
   pos_role: string | null;
+  pos_clerk_id: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -61,7 +62,7 @@ const labelCls = 'text-xs font-medium text-muted-foreground mb-1 block';
 
 export default function SuperadminEmployeesPage() {
   const { profile, loading: authLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<StaffRecord[]>([]);
@@ -107,7 +108,7 @@ export default function SuperadminEmployeesPage() {
     try {
       let query = supabase
         .from('employees')
-        .select('*, branches!branch_id(name), profiles!pos_profile_id(role)')
+        .select('*, branches!branch_id(name), profiles!pos_profile_id(role, clerk_id)')
         .order('created_at', { ascending: false });
 
       if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
@@ -122,6 +123,7 @@ export default function SuperadminEmployeesPage() {
         ...r,
         branch_name: r.branches?.name || 'Unknown',
         pos_role: r.profiles?.role || null,
+        pos_clerk_id: r.profiles?.clerk_id || null,
       }));
       setStaff(mapped);
     } catch (err) {
@@ -290,11 +292,11 @@ export default function SuperadminEmployeesPage() {
     setDeleting(true);
     try {
       // If the employee has a POS account, delete from auth + profiles via API
-      if (editingRecord.has_pos_account && editingRecord.pos_profile_id) {
+      if (editingRecord.has_pos_account && editingRecord.pos_clerk_id) {
         const res = await fetch('/api/superadmin/delete-user', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: editingRecord.pos_profile_id }),
+          body: JSON.stringify({ userId: editingRecord.pos_clerk_id }),
         });
         const data = await res.json();
         if (!res.ok) { showNotif('error', data.error || 'Failed to delete POS account'); return; }
