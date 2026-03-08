@@ -109,7 +109,7 @@ export function ReceiptPreview({
           </div>
           <div className="flex justify-between text-gray-500">
             <span>Tax (16%)</span>
-            <span className="text-black">Ksh {Math.round(total * 0.16 / 1.16).toLocaleString()}</span>
+            <span className="text-black">Ksh {Math.round(total * 0.16).toLocaleString()}</span>
           </div>
         </div>
 
