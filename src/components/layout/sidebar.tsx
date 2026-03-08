@@ -16,6 +16,7 @@ import {
   UsersIcon,
   ActivityIcon,
   ShieldIcon,
+  PrinterIcon,
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 
@@ -67,6 +68,7 @@ const navigationConfig: Record<UserRole, NavItem[]> = {
     { label: 'Employees', href: '/superadmin/employees', icon: UsersIcon },
     { label: 'Logs', href: '/superadmin/logs', icon: ActivityIcon },
     { label: 'Inventory', href: '/superadmin/inventory', icon: PackageIcon },
+    { label: 'Printers', href: '/superadmin/printers', icon: PrinterIcon },
     { label: 'Settings', href: '/superadmin/settings', icon: SettingsIcon },
   ],
 };

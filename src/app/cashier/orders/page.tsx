@@ -6,12 +6,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ProductGrid } from '@/components/cashier/product-grid';
 import { OrderCart, OrderItem } from '@/components/cashier/order-cart';
-import { ReceiptPreview } from '@/components/cashier/receipt-preview';
 import { useAuth } from '@/lib/auth/auth-context';
 import { createClient } from '@/lib/supabase/client';
 import { Loader2, Banknote, Smartphone } from 'lucide-react';
 import { Notification, useNotification } from '@/components/ui/notification';
 import { Skeleton } from '@/components/ui/skeleton';
+import { connect as connectQZ, printReceipt } from '@/lib/printing/qz-tray';
+import { buildReceiptLines } from '@/lib/printing/receipt-builder';
 
 interface Product {
   id: string;
@@ -32,7 +33,6 @@ export default function CashierOrdersPage() {
   const [cartItems, setCartItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState<'cash' | 'mpesa' | null>(null);
   const [branchName, setBranchName] = useState<string | undefined>(undefined);
 
   // Fetch products from the database (using new centralized schema)
@@ -131,7 +131,6 @@ export default function CashierOrdersPage() {
   // Clear entire cart
   const handleClearCart = () => {
     setCartItems([]);
-    setSelectedPayment(null);
     showNotification('success', 'Order cleared');
   };
 
@@ -141,11 +140,57 @@ export default function CashierOrdersPage() {
     0
   );
 
+  // Auto-print receipt via QZ Tray (fire-and-forget)
+  const autoPrint = async (orderData: {
+    orderNumber: number;
+    items: OrderItem[];
+    total: number;
+    paymentMethod: 'cash' | 'mpesa';
+  }) => {
+    try {
+      const connected = await connectQZ();
+      if (!connected) {
+        showNotification('error', 'Printer not connected');
+        return;
+      }
+
+      // Fetch branch printer config
+      const { data: config } = await supabase
+        .from('printer_configs')
+        .select('printer_name')
+        .eq('branch_id', profile!.branch_id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (!config?.printer_name) return;
+
+      const now = new Date();
+      const lines = buildReceiptLines({
+        branchName: branchName || 'Branch',
+        cashierName: profile?.full_name || 'Staff',
+        orderNumber: orderData.orderNumber,
+        items: orderData.items.map((i) => ({
+          product_name: i.product_name,
+          quantity: i.quantity,
+          product_price: i.product_price,
+        })),
+        total: orderData.total,
+        paymentMethod: orderData.paymentMethod,
+        date: now.toLocaleDateString('en-KE'),
+        time: now.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }),
+      });
+
+      await printReceipt(config.printer_name, lines);
+    } catch {
+      // Silent — printing is best-effort
+    }
+  };
+
   // Save order to database
   const saveOrder = async (paymentMethod: 'cash' | 'mpesa') => {
     if (!profile?.id || !profile?.branch_id) {
       showNotification('error', 'User profile not loaded');
-      return false;
+      return;
     }
 
     try {
@@ -189,16 +234,18 @@ export default function CashierOrdersPage() {
 
       if (itemsError) throw itemsError;
 
-      // Clear cart and reset payment selection
+      const savedItems = [...cartItems];
+      const savedTotal = total;
+
+      // Clear cart immediately
       setCartItems([]);
-      setSelectedPayment(null);
       showNotification('success', `Order completed - ${paymentMethod === 'mpesa' ? 'M-Pesa' : 'Cash'} payment`);
 
-      return true;
+      // Fire-and-forget print
+      autoPrint({ orderNumber, items: savedItems, total: savedTotal, paymentMethod });
     } catch (error) {
       console.error('Error saving order:', error);
       showNotification('error', 'Failed to save order. Please try again.');
-      return false;
     } finally {
       setProcessing(false);
     }
@@ -270,8 +317,8 @@ export default function CashierOrdersPage() {
               onClearCart={handleClearCart}
             />
 
-            {/* Step 1: Payment method selection */}
-            {cartItems.length > 0 && !selectedPayment && (
+            {/* Payment buttons — click to save order immediately */}
+            {cartItems.length > 0 && (
               <Card>
                 <CardContent className="p-4 space-y-2">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
@@ -279,52 +326,30 @@ export default function CashierOrdersPage() {
                   </p>
                   <Button
                     className="w-full gap-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-900 border border-yellow-300"
-                    onClick={() => setSelectedPayment('cash')}
+                    onClick={() => saveOrder('cash')}
+                    disabled={processing}
                   >
-                    <Banknote className="h-4 w-4" />
+                    {processing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Banknote className="h-4 w-4" />
+                    )}
                     Cash
                   </Button>
                   <Button
                     className="w-full gap-2 bg-red-100 hover:bg-red-200 text-red-900 border border-red-300"
-                    onClick={() => setSelectedPayment('mpesa')}
+                    onClick={() => saveOrder('mpesa')}
+                    disabled={processing}
                   >
-                    <Smartphone className="h-4 w-4" />
+                    {processing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Smartphone className="h-4 w-4" />
+                    )}
                     M-Pesa
                   </Button>
                 </CardContent>
               </Card>
-            )}
-
-            {/* Step 2: Receipt preview + confirm */}
-            {cartItems.length > 0 && selectedPayment && (
-              <div className="space-y-3">
-                <ReceiptPreview
-                  items={cartItems}
-                  total={total}
-                  paymentMethod={selectedPayment}
-                  branchName={branchName}
-                  cashierName={profile?.full_name}
-                />
-                <Button
-                  className="w-full gap-2"
-                  onClick={() => saveOrder(selectedPayment)}
-                  disabled={processing}
-                >
-                  {processing ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Processing...</>
-                  ) : (
-                    `Confirm ${selectedPayment === 'mpesa' ? 'M-Pesa' : 'Cash'} Payment`
-                  )}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full text-muted-foreground"
-                  onClick={() => setSelectedPayment(null)}
-                  disabled={processing}
-                >
-                  Change Payment Method
-                </Button>
-              </div>
             )}
           </div>
         </div>
