@@ -103,13 +103,6 @@ export default function LoginPage() {
     );
   }
 
-  const quickLogins = [
-    { email: 'cashier@kfries.com',     password: 'password123', role: 'Cashier',    color: 'bg-blue-500'   },
-    { email: 'manager@kfries.com',     password: 'password123', role: 'Manager',    color: 'bg-green-500'  },
-    { email: 'admin@company.com',      password: 'password123', role: 'Admin',      color: 'bg-purple-500' },
-    { email: 'superadmin@company.com', password: 'password123', role: 'Superadmin', color: 'bg-orange-500' },
-  ];
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-background to-secondary/10 p-4">
       {notification && (
@@ -156,31 +149,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Quick Access (Testing)</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            {quickLogins.map((login) => (
-              <Button
-                key={login.role} type="button" variant="outline" size="sm"
-                disabled={isSubmitting}
-                onClick={() => { setEmail(login.email); setPassword(login.password); }}
-                className="text-xs"
-              >
-                <div className={`w-2 h-2 rounded-full ${login.color} mr-2`} />
-                {login.role}
-              </Button>
-            ))}
-          </div>
-
-          <div className="text-xs text-center text-muted-foreground">
-            <p>Use the quick access buttons above to auto-fill credentials</p>
-            <p className="mt-1">Default password: <code className="bg-muted px-1 py-0.5 rounded">password123</code></p>
-          </div>
         </CardContent>
       </Card>
     </div>
