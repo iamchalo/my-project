@@ -35,7 +35,7 @@ interface Product {
 
 function ManagerInventoryPageContent() {
   const supabase = createClient();
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const { notification, showNotification, hideNotification } = useNotification();
 
   const [formData, setFormData] = useState<ProductForm>({
@@ -55,7 +55,7 @@ function ManagerInventoryPageContent() {
 
   // Get branch info from profile
   const branchId = profile?.branch_id || null;
-  const userId = user?.id || null;
+  const userId = profile?.clerk_id || null;
   const userName = profile?.full_name || 'Manager';
 
   // Fetch products on mount

@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Loader2 } from 'lucide-react';
 
@@ -11,45 +12,35 @@ interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-export function ProtectedRoute({
-  children,
-  allowedRoles,
-  redirectTo = '/login',
-}: ProtectedRouteProps) {
+export function ProtectedRoute({ children, allowedRoles, redirectTo = '/login' }: ProtectedRouteProps) {
   const router = useRouter();
-  const { user, profile, loading } = useAuth();
+  const { isSignedIn, isLoaded } = useUser();
+  const { profile, loading } = useAuth();
+
+  const ready = isLoaded && !loading;
 
   useEffect(() => {
-    if (!loading) {
-      // Not authenticated
-      if (!user || !profile) {
-        router.push(redirectTo);
-        return;
-      }
+    if (!ready) return;
 
-      // Authenticated but wrong role
-      if (allowedRoles && !allowedRoles.includes(profile.role)) {
-        // Redirect to appropriate dashboard for their role
-        const roleRoutes = {
-          cashier: '/cashier',
-          manager: '/manager',
-          admin: '/admin',
-          superadmin: '/superadmin',
-        };
-        router.push(roleRoutes[profile.role]);
-        return;
-      }
-
-      // Inactive user
-      if (!profile.is_active) {
-        router.push('/account-disabled');
-        return;
-      }
+    if (!isSignedIn || !profile) {
+      router.push(redirectTo);
+      return;
     }
-  }, [user, profile, loading, allowedRoles, router, redirectTo]);
 
-  // Show loading state while checking authentication
-  if (loading) {
+    if (!profile.is_active) {
+      router.push('/account-disabled');
+      return;
+    }
+
+    if (allowedRoles && !allowedRoles.includes(profile.role)) {
+      const roleRoutes: Record<string, string> = {
+        cashier: '/cashier', manager: '/manager', admin: '/admin', superadmin: '/superadmin',
+      };
+      router.push(roleRoutes[profile.role]);
+    }
+  }, [ready, isSignedIn, profile, allowedRoles, router, redirectTo]);
+
+  if (!ready) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -60,19 +51,9 @@ export function ProtectedRoute({
     );
   }
 
-  // Not authenticated or wrong role
-  if (!user || !profile) {
-    return null; // Will redirect via useEffect
-  }
+  if (!isSignedIn || !profile) return null;
+  if (!profile.is_active) return null;
+  if (allowedRoles && !allowedRoles.includes(profile.role)) return null;
 
-  if (allowedRoles && !allowedRoles.includes(profile.role)) {
-    return null; // Will redirect via useEffect
-  }
-
-  if (!profile.is_active) {
-    return null; // Will redirect via useEffect
-  }
-
-  // Authenticated and authorized
   return <>{children}</>;
 }

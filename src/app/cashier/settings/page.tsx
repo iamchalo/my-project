@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { UserIcon, EyeIcon, Loader2 } from 'lucide-react';
 import { ThemeDropdown } from '@/components/ui/theme-dropdown';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,7 +13,7 @@ import { ChangePasswordCard } from '@/components/settings/change-password-card';
 
 export default function CashierSettingsPage() {
   const { profile, loading: authLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [branchName, setBranchName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -232,9 +232,7 @@ export default function CashierSettingsPage() {
           </Card>
 
           {/* Change Password */}
-          {profile?.email && (
-            <ChangePasswordCard email={profile.email} onNotification={showNotification} />
-          )}
+          <ChangePasswordCard onNotification={showNotification} />
 
           {/* Display Settings */}
           <Card>

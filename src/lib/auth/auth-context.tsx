@@ -1,13 +1,14 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { User } from '@supabase/supabase-js';
-import { createClient } from '@/lib/supabase/client';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { useUser, useClerk } from '@clerk/nextjs';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 
 const SESSION_ID_KEY = 'pos-session-id';
 
-interface Profile {
+export interface Profile {
   id: string;
+  clerk_id: string;
   email: string;
   full_name: string;
   role: 'cashier' | 'manager' | 'admin' | 'superadmin';
@@ -21,10 +22,8 @@ interface Profile {
 }
 
 interface AuthContextType {
-  user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string, forceSession?: boolean) => Promise<{ error: Error | null; profile: Profile | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -32,17 +31,19 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  // useRef instead of useState: refs are mutable and always current inside
-  // closures, so the onAuthStateChange callback reads the latest value.
-  const skipNextFetchRef = useRef(false);
-  const supabase = createClient();
+  const { user, isLoaded: userLoaded } = useUser();
+  const { signOut: clerkSignOut } = useClerk();
+  const supabase = useClerkSupabaseClient();
 
-  // Write a login/logout entry to auth_logs (non-fatal — errors are swallowed)
-  const writeAuthLog = async (
-    userId: string,
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Overall loading = Clerk not ready OR profile not yet fetched
+  const loading = !userLoaded || profileLoading;
+
+  // ── Auth log (fire-and-forget) ──────────────────────────────────────────
+  const writeAuthLog = useCallback(async (
+    clerkId: string,
     userName: string,
     role: string,
     branchId: string | null,
@@ -51,199 +52,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       let branch: string | null = null;
       if (branchId) {
-        const { data: branchData } = await supabase
-          .from('branches')
-          .select('name')
-          .eq('id', branchId)
-          .maybeSingle();
-        branch = branchData?.name ?? null;
+        const { data } = await supabase.from('branches').select('name').eq('id', branchId).maybeSingle();
+        branch = data?.name ?? null;
       }
-      await supabase.from('auth_logs').insert({ user_id: userId, user_name: userName, role, branch, action });
+      await supabase.from('auth_logs').insert({ user_id: clerkId, user_name: userName, role, branch, action });
     } catch (err) {
       console.warn('[auth_logs] Failed to write log:', err);
     }
-  };
+  }, [supabase]);
 
-  // Fetch user profile from database
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, active_session_id, created_at, updated_at')
-        .eq('id', userId)
-        .single();
+  // ── Profile fetch (keyed on Clerk user ID) ───────────────────────────────
+  const fetchProfile = useCallback(async (clerkId: string): Promise<Profile | null> => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, clerk_id, email, full_name, role, branch_id, avatar_url, phone, is_active, active_session_id, created_at, updated_at')
+      .eq('clerk_id', clerkId)
+      .single();
 
-      if (error) {
-        console.error('Profile fetch error:', error);
-        throw error;
-      }
-      setProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
+    if (error) {
+      console.error('Profile fetch error:', error);
       setProfile(null);
+      return null;
     }
-  };
+    setProfile(data);
+    return data;
+  }, [supabase]);
 
-  // Initialize auth state — use onAuthStateChange as the single source of truth.
-  // It fires INITIAL_SESSION immediately on setup with the current session,
-  // which correctly handles page refreshes without a separate initAuth() race.
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        // Skip redundant profile fetch right after signIn() already fetched it.
-        // Uses a ref (not state) so the callback always reads the latest value.
-        if (skipNextFetchRef.current && event === 'SIGNED_IN') {
-          skipNextFetchRef.current = false;
-          setLoading(false);
-          return;
-        }
-
-        // PASSWORD_RECOVERY sessions don't need a profile — the user is only
-        // here to set a new password and will be redirected to login afterwards.
-        if (event === 'PASSWORD_RECOVERY') {
-          if (session?.user) setUser(session.user);
-          setLoading(false);
-          return;
-        }
-
-        if (session?.user) {
-          setUser(session.user);
-          await fetchProfile(session.user.id);
-          // Validate session nonce on page load (INITIAL_SESSION)
-          if (event === 'INITIAL_SESSION') {
-            const localSessionId = localStorage.getItem(SESSION_ID_KEY);
-            if (localSessionId) {
-              try {
-                const { data: dbSessionId } = await supabase.rpc('get_active_session_id');
-                if (dbSessionId && dbSessionId !== localSessionId) {
-                  sessionStorage.setItem('pos-session-kicked', 'Your session was ended because your account was signed in from another location.');
-                  localStorage.removeItem(SESSION_ID_KEY);
-                  await supabase.auth.signOut();
-                  setUser(null);
-                  setProfile(null);
-                  setLoading(false);
-                  window.location.href = '/login';
-                  return;
-                }
-              } catch {
-                // Don't kick on transient network errors
-              }
-            }
-          }
-        } else {
-          setUser(null);
-          setProfile(null);
-        }
-
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Sign in function
-  const signIn = async (email: string, password: string, forceSession?: boolean) => {
-    try {
-      // Don't set global loading here — the login page has its own isSubmitting
-      // state. Setting loading=true would flip authLoading, causing the login
-      // page to swap the form for skeletons.
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      let userProfile: Profile | null = null;
-
-      if (data.user) {
-        setUser(data.user);
-
-        // Fetch profile and store it
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, email, full_name, role, branch_id, avatar_url, phone, is_active, active_session_id, created_at, updated_at')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profileError) {
-          console.error('Profile fetch error in signIn:', profileError);
-        } else {
-          // Check if another session is already active
-          if (profileData.active_session_id && !forceSession) {
-            // Another session is active — block this login
-            await supabase.auth.signOut();
-            setUser(null);
-            setProfile(null);
-            return { error: { message: 'ACTIVE_SESSION_EXISTS' } as Error, profile: null };
-          }
-
-          // Generate session nonce, store in DB + localStorage
-          const sessionId = crypto.randomUUID();
-          localStorage.setItem(SESSION_ID_KEY, sessionId);
-          await supabase.rpc('set_active_session', { p_session_id: sessionId });
-
-          userProfile = profileData;
-          setProfile(profileData);
-          // Tell onAuthStateChange to skip its redundant fetch (ref, not state,
-          // so the callback always reads the current value).
-          skipNextFetchRef.current = true;
-          // Fire-and-forget: don't block login on audit logging
-          writeAuthLog(data.user.id, profileData.full_name, profileData.role, profileData.branch_id, 'login');
-        }
-      }
-
-      return { error: null, profile: userProfile };
-    } catch (error: any) {
-      console.error('Sign in error:', error);
-      return { error, profile: null };
-    }
-  };
-
-  // Sign out function
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      // Log before signing out (session is still valid at this point)
-      if (user && profile) {
-        await writeAuthLog(user.id, profile.full_name, profile.role, profile.branch_id, 'logout');
-      }
-      try { await supabase.rpc('clear_active_session'); } catch {}
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      // Clear cached form data and session nonce on logout
-      localStorage.removeItem('salesStockForm');
-      localStorage.removeItem(SESSION_ID_KEY);
-    } catch (error) {
-      console.error('Sign out error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Refresh profile data
-  const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.id);
-    }
-  };
-
-  // Force sign-out with a reason message (used when session is invalidated)
-  const forceSignOut = (reason: string) => {
+  // ── Force sign-out with reason ────────────────────────────────────────────
+  const forceSignOut = useCallback((reason: string) => {
     sessionStorage.setItem('pos-session-kicked', reason);
     localStorage.removeItem(SESSION_ID_KEY);
-    supabase.auth.signOut().finally(() => {
-      window.location.href = '/login';
-    });
-  };
+    clerkSignOut().finally(() => { window.location.href = '/login'; });
+  }, [clerkSignOut]);
 
-  // Validate that this browser's session nonce matches the DB
-  const validateSession = async (): Promise<boolean> => {
+  // ── Session nonce validation ──────────────────────────────────────────────
+  const validateSession = useCallback(async (): Promise<boolean> => {
     try {
       const localSessionId = localStorage.getItem(SESSION_ID_KEY);
       if (!localSessionId) {
@@ -251,49 +94,93 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
       const { data: dbSessionId, error } = await supabase.rpc('get_active_session_id');
-      if (error) {
-        // Network error — don't kick for transient failures
-        console.warn('Session validation failed (network):', error);
-        return true;
-      }
+      if (error) return true; // network error — don't kick
       if (dbSessionId !== localSessionId) {
         forceSignOut('Your session was ended because your account was signed in from another location.');
         return false;
       }
       return true;
     } catch {
-      // Treat errors as valid to avoid kicking on transient failures
       return true;
     }
-  };
+  }, [supabase, forceSignOut]);
 
-  // Validate session on tab focus (catches stale tabs after force-login on another device)
+  // ── React to Clerk user changes ───────────────────────────────────────────
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user) {
-        validateSession();
+    if (!userLoaded) return;
+
+    if (!user) {
+      setProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+
+    setProfileLoading(true);
+    fetchProfile(user.id).then(async (fetchedProfile) => {
+      setProfileLoading(false);
+      if (!fetchedProfile) return;
+
+      const localSessionId = localStorage.getItem(SESSION_ID_KEY);
+
+      if (!localSessionId) {
+        // New login — set a fresh session nonce
+        const sessionId = crypto.randomUUID();
+        localStorage.setItem(SESSION_ID_KEY, sessionId);
+        try { await supabase.rpc('set_active_session', { p_session_id: sessionId }); } catch {}
+        writeAuthLog(user.id, fetchedProfile.full_name, fetchedProfile.role, fetchedProfile.branch_id, 'login');
+      } else {
+        // Page refresh — validate the existing nonce
+        try {
+          const { data: dbSessionId } = await supabase.rpc('get_active_session_id');
+          if (dbSessionId && dbSessionId !== localSessionId) {
+            sessionStorage.setItem('pos-session-kicked', 'Your session was ended because your account was signed in from another location.');
+            localStorage.removeItem(SESSION_ID_KEY);
+            await clerkSignOut();
+            setProfile(null);
+            window.location.href = '/login';
+          }
+        } catch {
+          // Transient network error — don't kick
+        }
       }
+    });
+  }, [user?.id, userLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Validate session on tab focus ─────────────────────────────────────────
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && user) validateSession();
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user]);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [user, validateSession]);
 
-  const value: AuthContextType = {
-    user,
-    profile,
-    loading,
-    signIn,
-    signOut,
-    refreshProfile,
-  };
+  // ── Sign out ──────────────────────────────────────────────────────────────
+  const signOut = useCallback(async () => {
+    if (user && profile) {
+      await writeAuthLog(user.id, profile.full_name, profile.role, profile.branch_id, 'logout');
+    }
+    try { await supabase.rpc('clear_active_session'); } catch {}
+    localStorage.removeItem('salesStockForm');
+    localStorage.removeItem(SESSION_ID_KEY);
+    await clerkSignOut();
+    setProfile(null);
+  }, [user, profile, supabase, clerkSignOut, writeAuthLog]);
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  // ── Refresh profile ───────────────────────────────────────────────────────
+  const refreshProfile = useCallback(async () => {
+    if (user) await fetchProfile(user.id);
+  }, [user, fetchProfile]);
+
+  return (
+    <AuthContext.Provider value={{ profile, loading, signOut, refreshProfile }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  return ctx;
 }

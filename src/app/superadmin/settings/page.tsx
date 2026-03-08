@@ -5,14 +5,14 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { UserIcon, ShieldIcon, DatabaseIcon, EyeIcon, Loader2 } from 'lucide-react';
 import { ThemeDropdown } from '@/components/ui/theme-dropdown';
 import { ChangePasswordCard } from '@/components/settings/change-password-card';
 
 export default function SuperadminSettingsPage() {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -144,9 +144,7 @@ export default function SuperadminSettingsPage() {
             </CardContent>
           </Card>
 
-          {profile?.email && (
-            <ChangePasswordCard email={profile.email} onNotification={showNotification} />
-          )}
+          <ChangePasswordCard onNotification={showNotification} />
 
           <Card>
             <CardHeader>
