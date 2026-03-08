@@ -11,7 +11,6 @@ import {
   DollarSignIcon,
   UsersIcon,
   TrendingUpIcon,
-  ShoppingCartIcon,
   BuildingIcon,
   ArrowUpIcon,
   ArrowDownIcon,
@@ -21,8 +20,6 @@ import {
   CreditCardIcon,
   BanknoteIcon,
   CrownIcon,
-  ActivityIcon,
-  DatabaseIcon,
 } from 'lucide-react';
 
 interface DashboardStats {
@@ -57,23 +54,6 @@ interface BranchPerformance {
   orders: number;
 }
 
-interface RecentOrder {
-  id: string;
-  order_number: string;
-  branch_name: string;
-  cashier_name: string;
-  payment_method: string;
-  total_amount: number;
-  created_at: string;
-}
-
-interface TopPerformer {
-  id: string;
-  name: string;
-  branch_name: string;
-  total_sales: number;
-  order_count: number;
-}
 
 export default function SuperadminDashboard() {
   const { profile, loading: authLoading } = useAuth();
@@ -83,8 +63,6 @@ export default function SuperadminDashboard() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [dailySales, setDailySales] = useState<DailySales[]>([]);
   const [branchPerformance, setBranchPerformance] = useState<BranchPerformance[]>([]);
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [topPerformers, setTopPerformers] = useState<TopPerformer[]>([]);
 
   const getKenyaDate = () => {
     const now = new Date();
@@ -114,7 +92,6 @@ export default function SuperadminDashboard() {
         branchesResult,
         expensesResult,
         dailySalesResult,
-        recentOrdersResult,
       ] = await Promise.all([
         supabase
           .from('orders')
@@ -146,19 +123,6 @@ export default function SuperadminDashboard() {
           .gte('created_at', getDateRange(7).start)
           .order('created_at', { ascending: true }),
 
-        supabase
-          .from('orders')
-          .select(`
-            id,
-            order_number,
-            payment_method,
-            total_amount,
-            created_at,
-            branches!inner(name),
-            profiles!inner(full_name)
-          `)
-          .order('created_at', { ascending: false })
-          .limit(10),
       ]);
 
       const orders = ordersResult.data || [];
@@ -206,17 +170,6 @@ export default function SuperadminDashboard() {
         .sort((a, b) => a.date.localeCompare(b.date));
       setDailySales(dailySalesArray);
 
-      const processedOrders = (recentOrdersResult.data || []).map((order: any) => ({
-        id: order.id,
-        order_number: order.order_number,
-        branch_name: order.branches?.name || 'Unknown',
-        cashier_name: order.profiles?.full_name || 'Unknown',
-        payment_method: order.payment_method,
-        total_amount: order.total_amount,
-        created_at: order.created_at,
-      }));
-      setRecentOrders(processedOrders);
-
       const branchPerfResult = await supabase
         .from('orders')
         .select('branch_id, total_amount, branches!inner(id, name, code)')
@@ -241,32 +194,6 @@ export default function SuperadminDashboard() {
       const branchPerfArray = Object.values(branchStats).sort((a, b) => b.revenue - a.revenue);
       setBranchPerformance(branchPerfArray);
 
-      const topPerfResult = await supabase
-        .from('orders')
-        .select('cashier_id, total_amount, profiles!inner(id, full_name, branch_id), branches!inner(name)')
-        .gte('created_at', thirtyDaysAgo);
-
-      const cashierStats: Record<string, TopPerformer> = {};
-      (topPerfResult.data || []).forEach((order: any) => {
-        const cashierId = order.cashier_id;
-        if (!cashierStats[cashierId]) {
-          cashierStats[cashierId] = {
-            id: cashierId,
-            name: order.profiles?.full_name || 'Unknown',
-            branch_name: order.branches?.name || 'Unknown',
-            total_sales: 0,
-            order_count: 0,
-          };
-        }
-        cashierStats[cashierId].total_sales += order.total_amount || 0;
-        cashierStats[cashierId].order_count += 1;
-      });
-
-      const topPerfArray = Object.values(cashierStats)
-        .sort((a, b) => b.total_sales - a.total_sales)
-        .slice(0, 5);
-      setTopPerformers(topPerfArray);
-
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -280,16 +207,6 @@ export default function SuperadminDashboard() {
 
   const formatCurrency = (amount: number) => {
     return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
-
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-KE', {
-      timeZone: 'Africa/Nairobi',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   if (loading) {
@@ -579,106 +496,6 @@ export default function SuperadminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Bottom Row */}
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Recent Orders */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShoppingCartIcon className="h-5 w-5 text-muted-foreground" />
-                    <CardTitle className="text-lg">Recent Orders</CardTitle>
-                  </div>
-                  <Button variant="ghost" size="sm" asChild>
-                    <a href="/superadmin/orders">View All</a>
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {recentOrders.length === 0 ? (
-                  <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    No recent orders
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 font-medium text-muted-foreground">Order</th>
-                          <th className="text-left py-2 font-medium text-muted-foreground hidden sm:table-cell">Branch</th>
-                          <th className="text-left py-2 font-medium text-muted-foreground hidden md:table-cell">Cashier</th>
-                          <th className="text-left py-2 font-medium text-muted-foreground">Payment</th>
-                          <th className="text-right py-2 font-medium text-muted-foreground">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentOrders.map((order) => (
-                          <tr key={order.id} className="border-b last:border-0">
-                            <td className="py-2">
-                              <div>
-                                <p className="font-medium">{order.order_number}</p>
-                                <p className="text-xs text-muted-foreground">{formatTime(order.created_at)}</p>
-                              </div>
-                            </td>
-                            <td className="py-2 hidden sm:table-cell">{order.branch_name}</td>
-                            <td className="py-2 hidden md:table-cell">{order.cashier_name}</td>
-                            <td className="py-2">
-                              <Badge variant={order.payment_method === 'mpesa' ? 'default' : 'secondary'}>
-                                {order.payment_method === 'mpesa' ? 'M-Pesa' : 'Cash'}
-                              </Badge>
-                            </td>
-                            <td className="py-2 text-right font-medium">{formatCurrency(order.total_amount)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Top Performers */}
-            <Card>
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <ActivityIcon className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle className="text-lg">Top Performers</CardTitle>
-                </div>
-                <p className="text-xs text-muted-foreground">Last 30 days</p>
-              </CardHeader>
-              <CardContent>
-                {topPerformers.length === 0 ? (
-                  <div className="flex items-center justify-center h-32 text-muted-foreground">
-                    No performance data
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {topPerformers.map((performer, index) => (
-                      <div key={performer.id} className="flex items-center gap-3">
-                        <div className={`
-                          w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
-                          ${index === 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : ''}
-                          ${index === 1 ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' : ''}
-                          ${index === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' : ''}
-                          ${index > 2 ? 'bg-muted text-muted-foreground' : ''}
-                        `}>
-                          {index + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{performer.name}</p>
-                          <p className="text-xs text-muted-foreground">{performer.branch_name}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-semibold text-sm">{formatCurrency(performer.total_sales)}</p>
-                          <p className="text-xs text-muted-foreground">{performer.order_count} orders</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
 
           {/* System Health removed */}
         </div>
