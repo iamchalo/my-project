@@ -344,6 +344,7 @@ export default function SuperadminEmployeesPage() {
                 <option value="Cashier">Cashier</option>
                 <option value="Manager">Manager</option>
                 <option value="Chef">Chef</option>
+                <option value="Super Admin">Super Admin</option>
               </select>
             </div>
             <div>
