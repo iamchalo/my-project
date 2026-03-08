@@ -155,7 +155,7 @@ export default function AdminEmployeesPage() {
   };
 
   const handleCreate = async () => {
-    const isSuperAdminTitle = formData.job_title === 'Super Admin';
+    const isSuperAdminTitle = formData.job_title === 'Super Admin' || formData.job_title === 'Admin';
     if (!formData.full_name.trim() || !formData.job_title.trim() || (!isSuperAdminTitle && !formData.branch_id)) {
       showNotif('error', isSuperAdminTitle ? 'Full name and job title are required' : 'Full name, job title, and branch are required');
       return;
@@ -216,7 +216,7 @@ export default function AdminEmployeesPage() {
   };
 
   const handleUpdate = async () => {
-    const isSuperAdminTitle = formData.job_title === 'Super Admin';
+    const isSuperAdminTitle = formData.job_title === 'Super Admin' || formData.job_title === 'Admin';
     if (!editingRecord || !formData.full_name.trim() || !formData.job_title.trim() || (!isSuperAdminTitle && !formData.branch_id)) {
       showNotif('error', isSuperAdminTitle ? 'Full name and job title are required' : 'Full name, job title, and branch are required');
       return;
@@ -312,14 +312,15 @@ export default function AdminEmployeesPage() {
                 <option value="Cashier">Cashier</option>
                 <option value="Manager">Manager</option>
                 <option value="Chef">Chef</option>
+                <option value="Admin">Admin</option>
                 <option value="Super Admin">Super Admin</option>
               </select>
             </div>
             <div>
-              <label className={labelCls}>Branch {formData.job_title !== 'Super Admin' && '*'}</label>
+              <label className={labelCls}>Branch {formData.job_title !== 'Super Admin' && formData.job_title !== 'Admin' && '*'}</label>
               <select value={formData.branch_id} onChange={e => set('branch_id', e.target.value)} className={inputCls}
-                disabled={formData.job_title === 'Super Admin'}>
-                <option value="">{formData.job_title === 'Super Admin' ? 'N/A – Super Admin' : 'Select Branch'}</option>
+                disabled={formData.job_title === 'Super Admin' || formData.job_title === 'Admin'}>
+                <option value="">{(formData.job_title === 'Super Admin' || formData.job_title === 'Admin') ? 'N/A' : 'Select Branch'}</option>
                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
