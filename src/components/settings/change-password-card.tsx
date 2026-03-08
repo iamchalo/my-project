@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
+import { createClient as createRawClient } from '@supabase/supabase-js';
 import { KeyIcon, Loader2, CheckIcon } from 'lucide-react';
 
 interface ChangePasswordCardProps {
@@ -43,8 +44,14 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
     try {
       setChanging(true);
 
-      // Verify current password using the shared client
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
+      // Verify current password using a throwaway client (persistSession:false)
+      // so it does NOT fire onAuthStateChange on the shared client
+      const verifyClient = createRawClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { persistSession: false } },
+      );
+      const { error: verifyError } = await verifyClient.auth.signInWithPassword({
         email,
         password: currentPassword,
       });
