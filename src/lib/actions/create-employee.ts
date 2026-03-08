@@ -42,7 +42,7 @@ export async function createEmployee(data: CreateEmployeeData): Promise<CreateEm
         email: data.email,
         full_name: data.full_name,
         role: data.role,
-        branch_id: data.branch_id,
+        branch_id: data.branch_id || null,
         phone: data.phone || null,
         is_active: true,
       })
