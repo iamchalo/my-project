@@ -62,7 +62,7 @@ export default function LoginPage() {
         window.location.href = '/';
       } else {
         // MFA or other additional steps required
-        showNotification('error', 'Additional verification required. Please contact admin.');
+        showNotification('error', `Status: ${result.status} — factors: ${JSON.stringify(result.missingFields ?? [])}`);
         setIsSubmitting(false);
       }
     } catch (err: any) {
