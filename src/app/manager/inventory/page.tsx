@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Notification, useNotification } from '@/components/ui/notification';
 import { ProtectedRoute } from '@/components/auth/protected-route';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { PlusIcon, Trash2Icon, EditIcon, Loader2 } from 'lucide-react';
 
 interface ProductForm {
@@ -34,7 +34,7 @@ interface Product {
 }
 
 function ManagerInventoryPageContent() {
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
   const { profile } = useAuth();
   const { notification, showNotification, hideNotification } = useNotification();
 

@@ -6,7 +6,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Loader2, ChevronDownIcon, ChevronUpIcon, CalendarIcon } from 'lucide-react';
 import { useNotification } from '@/components/ui/notification';
 import { getKenyaDateString } from '@/lib/date-utils';
@@ -57,7 +57,7 @@ interface StockCount {
 export default function ManagerSalesStockPage() {
   const { profile } = useAuth();
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
   const { showNotification } = useNotification();
 
   // Block manager role — redirect to dashboard immediately

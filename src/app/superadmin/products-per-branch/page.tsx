@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/dashboard/data-table';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { BuildingIcon, AlertTriangleIcon, Loader2 } from 'lucide-react';
 
 interface Branch {
@@ -27,7 +27,7 @@ interface ProductInventory {
 
 export default function SuperadminProductsPerBranchPage() {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<Branch[]>([]);

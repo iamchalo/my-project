@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useShift } from '@/lib/shift/shift-context';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { XIcon, Loader2Icon, LogOutIcon, ReceiptIcon } from 'lucide-react';
 
@@ -16,7 +16,7 @@ interface EndShiftModalProps {
 export function EndShiftModal({ isOpen, onClose, onShiftEnded }: EndShiftModalProps) {
   const { activeShift, endShift } = useShift();
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(false);
   const [calculatingTotals, setCalculatingTotals] = useState(true);

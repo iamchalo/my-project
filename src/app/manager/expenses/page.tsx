@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { DataTable } from '@/components/dashboard/data-table';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { DollarSignIcon, PencilIcon, XIcon, Loader2Icon, LockIcon } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString, getKenyaHour } from '@/lib/date-utils';
 
 interface Expense {
@@ -38,7 +38,7 @@ interface Cashier {
 }
 
 export default function ManagerExpensesPage() {
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   // User state
   const [profile, setProfile] = useState<Profile | null>(null);

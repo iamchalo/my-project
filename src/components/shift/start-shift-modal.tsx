@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useShift } from '@/lib/shift/shift-context';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SunIcon, MoonIcon, Loader2Icon, PlayIcon, ChefHatIcon, CheckIcon } from 'lucide-react';
@@ -22,7 +22,7 @@ interface StartShiftModalProps {
 export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
   const { startShift, getCurrentShiftType } = useShift();
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

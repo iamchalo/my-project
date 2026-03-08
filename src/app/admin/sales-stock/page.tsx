@@ -6,7 +6,7 @@ import { StatCard } from '@/components/dashboard/stat-card';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
 import {
   DollarSignIcon,
@@ -79,7 +79,7 @@ interface DailySummary {
 
 export default function AdminSalesStockPage() {
   const { profile, loading: authLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<ShiftRecord[]>([]);

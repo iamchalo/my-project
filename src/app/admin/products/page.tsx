@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Loader2, PlusIcon, Edit, Check, X } from 'lucide-react';
 import { useNotification } from '@/components/ui/notification';
 
@@ -31,7 +31,7 @@ interface BranchAvailability {
 
 export default function AdminProductsPage() {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
   const { showNotification } = useNotification();
 
   const [products, setProducts] = useState<Product[]>([]);

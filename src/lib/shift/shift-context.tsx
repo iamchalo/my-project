@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth/auth-context';
 
 interface ActiveShift {
@@ -27,7 +27,7 @@ const ShiftContext = createContext<ShiftContextType | undefined>(undefined);
 
 export function ShiftProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [loading, setLoading] = useState(true);

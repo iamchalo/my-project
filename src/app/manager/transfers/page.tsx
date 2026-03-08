@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
 import {
   PlusIcon, Loader2Icon, XIcon, RefreshCwIcon,
@@ -60,7 +60,7 @@ const inputCls = 'px-3 py-2 border rounded-lg bg-background text-sm focus:outlin
 
 export default function ManagerTransfersPage() {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/dashboard/data-table';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ClockIcon, UsersIcon, SunIcon, MoonIcon, Loader2Icon, DollarSignIcon } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
 
 interface Shift {
@@ -37,7 +37,7 @@ interface Cashier {
 }
 
 export default function ManagerShiftsPage() {
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   // User state
   const [profile, setProfile] = useState<Profile | null>(null);

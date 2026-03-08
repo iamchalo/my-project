@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import {
   Loader2Icon, RefreshCwIcon, ClockIcon, TruckIcon,
   CheckCircleIcon, SearchIcon, ChevronUpIcon, ChevronDownIcon,
@@ -59,7 +59,7 @@ const inputCls = 'px-3 py-2 border rounded-lg bg-background text-sm focus:outlin
 export default function AdminTransfersPage() {
   const { profile, loading: authLoading } = useAuth();
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);

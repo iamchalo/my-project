@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
 import { ActivityIcon, LogInIcon, LogOutIcon, UsersIcon, Loader2 } from 'lucide-react';
 
@@ -20,7 +20,7 @@ interface AuthLog {
 
 export default function SuperadminLogsPage() {
   const { profile, loading: authLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading]           = useState(true);
   const [logs, setLogs]                 = useState<AuthLog[]>([]);

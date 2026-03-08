@@ -7,7 +7,7 @@ import { NavigationCard } from '@/components/dashboard/navigation-card';
 import { NavigationCardSkeleton } from '@/components/dashboard/skeletons';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useShift } from '@/lib/shift/shift-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { StartShiftModal, EndShiftModal } from '@/components/shift';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,7 +31,7 @@ export default function CashierDashboard() {
   const router = useRouter();
   const { profile, signOut } = useAuth();
   const { hasActiveShift, activeShift, loading: shiftLoading } = useShift();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [showStartShiftModal, setShowStartShiftModal] = useState(false);
   const [showEndShiftForLogout, setShowEndShiftForLogout] = useState(false);

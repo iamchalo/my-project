@@ -148,13 +148,7 @@ export default function CashierOrdersPage() {
     paymentMethod: 'cash' | 'mpesa';
   }) => {
     try {
-      const connected = await connectQZ();
-      if (!connected) {
-        showNotification('error', 'Printer not connected');
-        return;
-      }
-
-      // Fetch branch printer config
+      // Check for a printer config first — skip QZ entirely if none configured
       const { data: config } = await supabase
         .from('printer_configs')
         .select('printer_name')
@@ -162,7 +156,13 @@ export default function CashierOrdersPage() {
         .eq('is_active', true)
         .maybeSingle();
 
-      if (!config?.printer_name) return;
+      if (!config?.printer_name) return; // no printer configured, nothing to do
+
+      const connected = await connectQZ();
+      if (!connected) {
+        showNotification('error', 'Printer not connected');
+        return;
+      }
 
       const now = new Date();
       const lines = buildReceiptLines({

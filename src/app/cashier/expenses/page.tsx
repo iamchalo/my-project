@@ -6,7 +6,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Loader2, PlusIcon } from 'lucide-react';
 import { useNotification } from '@/components/ui/notification';
 import { getKenyaDateString, getTodayFormatted } from '@/lib/date-utils';
@@ -29,7 +29,7 @@ interface Expense {
 export default function CashierExpensesPage() {
   const router = useRouter();
   const { profile, signOut } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
   const { showNotification } = useNotification();
   const { hasActiveShift, loading: shiftLoading, activeShift } = useShift();
 

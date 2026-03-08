@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import {
   PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon,
   EyeIcon, EyeOffIcon, MonitorIcon, ChefHatIcon,
@@ -60,7 +60,7 @@ const labelCls = 'text-xs font-medium text-muted-foreground mb-1 block';
 
 export default function AdminEmployeesPage() {
   const { profile, loading: authLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<StaffRecord[]>([]);

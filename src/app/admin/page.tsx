@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import {
   DollarSignIcon, TrendingUpIcon, ShoppingCartIcon,
   BuildingIcon, RefreshCwIcon, ArrowDownIcon, ArrowUpIcon,
@@ -90,7 +90,7 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function AdminDashboard() {
   const { profile, loading: authLoading } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
 
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
