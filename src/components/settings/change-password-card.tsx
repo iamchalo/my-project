@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { createClient as createRawClient } from '@supabase/supabase-js';
-import { KeyIcon, Loader2, CheckIcon } from 'lucide-react';
+import { KeyIcon, Loader2, CheckIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
 
 interface ChangePasswordCardProps {
   email: string;
@@ -19,6 +19,9 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
   const [confirmPassword, setConfirmPassword] = useState('');
   const [changing, setChanging] = useState(false);
   const [succeeded, setSucceeded] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -99,39 +102,72 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
       <CardContent className="space-y-4">
         <div>
           <label className="text-sm font-medium mb-2 block">Current Password</label>
-          <input
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            placeholder="Enter current password"
-            disabled={changing}
-            className="w-full px-4 py-2 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
-            autoComplete="current-password"
-          />
+          <div className="relative">
+            <input
+              type={showCurrent ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+              disabled={changing}
+              className={`w-full px-4 py-2 pr-10 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300 ${showCurrent ? 'tracking-wide animate-reveal' : ''}`}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCurrent(v => !v)}
+              disabled={changing}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              tabIndex={-1}
+            >
+              {showCurrent ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         <div>
           <label className="text-sm font-medium mb-2 block">New Password</label>
-          <input
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="Enter new password (min. 6 characters)"
-            disabled={changing}
-            className="w-full px-4 py-2 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
-            autoComplete="new-password"
-          />
+          <div className="relative">
+            <input
+              type={showNew ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Enter new password (min. 6 characters)"
+              disabled={changing}
+              className={`w-full px-4 py-2 pr-10 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300 ${showNew ? 'tracking-wide animate-reveal' : ''}`}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowNew(v => !v)}
+              disabled={changing}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              tabIndex={-1}
+            >
+              {showNew ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
         <div>
           <label className="text-sm font-medium mb-2 block">Confirm New Password</label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            placeholder="Re-enter new password"
-            disabled={changing}
-            className="w-full px-4 py-2 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
-            autoComplete="new-password"
-          />
+          <div className="relative">
+            <input
+              type={showConfirm ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter new password"
+              disabled={changing}
+              className={`w-full px-4 py-2 pr-10 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary transition-all duration-300 ${showConfirm ? 'tracking-wide animate-reveal' : ''}`}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirm(v => !v)}
+              disabled={changing}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+              tabIndex={-1}
+            >
+              {showConfirm ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <Button

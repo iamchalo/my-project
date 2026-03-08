@@ -120,3 +120,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes reveal-wave {
+  0%   { opacity: 0.4; letter-spacing: -0.05em; }
+  50%  { opacity: 0.8; letter-spacing: 0.08em; }
+  100% { opacity: 1;   letter-spacing: 0.05em; }
+}
+
+.animate-reveal {
+  animation: reveal-wave 0.35s ease-out forwards;
+}
