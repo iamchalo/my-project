@@ -62,7 +62,7 @@ export default function LoginPage() {
         window.location.href = '/';
       } else {
         // MFA or other additional steps required
-        showNotification('error', `Status: ${result.status} — factors: ${JSON.stringify(result.missingFields ?? [])}`);
+        showNotification('error', `Status: ${result.status}`);
         setIsSubmitting(false);
       }
     } catch (err: any) {
