@@ -165,8 +165,9 @@ export default function SuperadminEmployeesPage() {
   };
 
   const handleCreate = async () => {
-    if (!formData.full_name.trim() || !formData.job_title.trim() || !formData.branch_id) {
-      showNotif('error', 'Full name, job title, and branch are required');
+    const isSuperAdmin = formData.job_title === 'Super Admin';
+    if (!formData.full_name.trim() || !formData.job_title.trim() || (!isSuperAdmin && !formData.branch_id)) {
+      showNotif('error', isSuperAdmin ? 'Full name and job title are required' : 'Full name, job title, and branch are required');
       return;
     }
     if (formData.has_pos_account) {
@@ -202,7 +203,7 @@ export default function SuperadminEmployeesPage() {
         email: formData.email.trim() || null,
         job_title: formData.job_title.trim(),
         date_of_reporting: formData.date_of_reporting || null,
-        branch_id: formData.branch_id,
+        branch_id: formData.branch_id || null,
         next_of_kin_name: formData.next_of_kin_name.trim() || null,
         next_of_kin_phone: formData.next_of_kin_phone.trim() || null,
         has_pos_account: formData.has_pos_account,
@@ -225,8 +226,9 @@ export default function SuperadminEmployeesPage() {
   };
 
   const handleUpdate = async () => {
-    if (!editingRecord || !formData.full_name.trim() || !formData.job_title.trim() || !formData.branch_id) {
-      showNotif('error', 'Full name, job title, and branch are required');
+    const isSuperAdmin = formData.job_title === 'Super Admin';
+    if (!editingRecord || !formData.full_name.trim() || !formData.job_title.trim() || (!isSuperAdmin && !formData.branch_id)) {
+      showNotif('error', isSuperAdmin ? 'Full name and job title are required' : 'Full name, job title, and branch are required');
       return;
     }
 
@@ -240,7 +242,7 @@ export default function SuperadminEmployeesPage() {
         email: formData.email.trim() || null,
         job_title: formData.job_title.trim(),
         date_of_reporting: formData.date_of_reporting || null,
-        branch_id: formData.branch_id,
+        branch_id: formData.branch_id || null,
         next_of_kin_name: formData.next_of_kin_name.trim() || null,
         next_of_kin_phone: formData.next_of_kin_phone.trim() || null,
         is_active: formData.is_active,
@@ -348,9 +350,10 @@ export default function SuperadminEmployeesPage() {
               </select>
             </div>
             <div>
-              <label className={labelCls}>Branch *</label>
-              <select value={formData.branch_id} onChange={e => set('branch_id', e.target.value)} className={inputCls}>
-                <option value="">Select Branch</option>
+              <label className={labelCls}>Branch {formData.job_title !== 'Super Admin' && '*'}</label>
+              <select value={formData.branch_id} onChange={e => set('branch_id', e.target.value)} className={inputCls}
+                disabled={formData.job_title === 'Super Admin'}>
+                <option value="">{formData.job_title === 'Super Admin' ? 'N/A – Super Admin' : 'Select Branch'}</option>
                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </div>
