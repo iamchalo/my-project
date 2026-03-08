@@ -16,7 +16,7 @@ export default function CashierSettingsPage() {
   const supabase = createClient();
 
   const [branchName, setBranchName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 

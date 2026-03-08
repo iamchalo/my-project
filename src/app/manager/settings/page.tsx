@@ -16,7 +16,7 @@ export default function ManagerSettingsPage() {
   const supabase = createClient();
   const { showNotification } = useNotification();
   const [branchName, setBranchName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;

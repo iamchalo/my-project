@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
-import { createClient as createRawClient } from '@supabase/supabase-js';
 import { KeyIcon, Loader2, CheckIcon } from 'lucide-react';
 
 interface ChangePasswordCardProps {
@@ -44,16 +43,8 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
     try {
       setChanging(true);
 
-      // Verify current password using a throwaway client (not the singleton SSR
-      // client) so that signInWithPassword doesn't trigger onAuthStateChange,
-      // profile re-fetches, or session nonce validation on the main client.
-      const verifyClient = createRawClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { auth: { persistSession: false } },
-      );
-
-      const { error: verifyError } = await verifyClient.auth.signInWithPassword({
+      // Verify current password using the shared client
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
         email,
         password: currentPassword,
       });
@@ -73,12 +64,14 @@ export function ChangePasswordCard({ email, onNotification }: ChangePasswordCard
       onNotification('success', 'Password changed successfully!');
       setChanging(false);
       setSucceeded(true);
-      await new Promise(r => setTimeout(r, 1500));
 
-      // Password changed — clear the active session nonce and sign out globally
+      // Clear session and sign out immediately
       try { await supabase.rpc('clear_active_session'); } catch {}
       localStorage.removeItem('pos-session-id');
       await supabase.auth.signOut({ scope: 'global' });
+
+      // Brief pause so the success state is visible before navigating
+      await new Promise(r => setTimeout(r, 300));
       window.location.href = '/login';
     } catch (error: any) {
       console.error('Error changing password:', error);
