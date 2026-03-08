@@ -25,13 +25,25 @@ export async function createEmployee(data: CreateEmployeeData): Promise<CreateEm
     const [firstName, ...rest] = data.full_name.trim().split(' ');
     const lastName = rest.join(' ') || undefined;
 
-    const clerkUser = await clerk.users.createUser({
-      emailAddress: [data.email],
-      password: data.password,
-      firstName,
-      lastName,
-      skipPasswordRequirement: true,
-    });
+    let clerkUser;
+    try {
+      clerkUser = await clerk.users.createUser({
+        emailAddress: [data.email],
+        password: data.password,
+        firstName,
+        lastName,
+        skipPasswordRequirement: true,
+      });
+    } catch (clerkErr: any) {
+      // If email already exists in Clerk, look up the existing user
+      if (clerkErr?.status === 422 && clerkErr?.errors?.[0]?.code === 'form_identifier_exists') {
+        const existing = await clerk.users.getUserList({ emailAddress: [data.email] });
+        if (!existing.data.length) throw clerkErr;
+        clerkUser = existing.data[0];
+      } else {
+        throw clerkErr;
+      }
+    }
 
     // 2. Create profile in Supabase linked to Clerk user
     const supabase = createAdminClient();
