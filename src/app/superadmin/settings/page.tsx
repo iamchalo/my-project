@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { UserIcon, ShieldIcon, DatabaseIcon, EyeIcon, Loader2 } from 'lucide-react';
 import { ThemeDropdown } from '@/components/ui/theme-dropdown';
-import { ChangePasswordCard } from '@/components/settings/change-password-card';
 
 export default function SuperadminSettingsPage() {
   const { profile } = useAuth();
@@ -143,8 +142,6 @@ export default function SuperadminSettingsPage() {
               </div>
             </CardContent>
           </Card>
-
-          <ChangePasswordCard onNotification={showNotification} />
 
           <Card>
             <CardHeader>

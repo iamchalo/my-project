@@ -9,7 +9,6 @@ import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { UserIcon, EyeIcon, Loader2 } from 'lucide-react';
 import { ThemeDropdown } from '@/components/ui/theme-dropdown';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChangePasswordCard } from '@/components/settings/change-password-card';
 
 export default function CashierSettingsPage() {
   const { profile, loading: authLoading } = useAuth();
@@ -230,9 +229,6 @@ export default function CashierSettingsPage() {
               </div>
             </CardContent>
           </Card>
-
-          {/* Change Password */}
-          <ChangePasswordCard onNotification={showNotification} />
 
           {/* Display Settings */}
           <Card>

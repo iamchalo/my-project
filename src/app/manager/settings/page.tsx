@@ -9,7 +9,6 @@ import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { UserIcon, Loader2, EyeIcon } from 'lucide-react';
 import { ThemeDropdown } from '@/components/ui/theme-dropdown';
 import { useNotification } from '@/components/ui/notification';
-import { ChangePasswordCard } from '@/components/settings/change-password-card';
 
 export default function ManagerSettingsPage() {
   const { profile, loading: authLoading } = useAuth();
@@ -120,8 +119,6 @@ export default function ManagerSettingsPage() {
               </div>
             </CardContent>
           </Card>
-
-          <ChangePasswordCard onNotification={showNotification} />
 
           {/* Display Settings */}
           <Card>
