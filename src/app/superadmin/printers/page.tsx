@@ -5,7 +5,7 @@ import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Printer, Plus, Pencil, Trash2, Wifi, WifiOff, FlaskConical } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { useAuth } from '@/lib/auth/auth-context';
 import { Notification, useNotification } from '@/components/ui/notification';
 import { connect as connectQZ, isConnected, getPrinters, printReceipt } from '@/lib/printing/qz-tray';
@@ -44,7 +44,7 @@ const emptyForm: FormState = {
 
 export default function PrintersPage() {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
   const { notification, showNotification, hideNotification } = useNotification();
 
   const [configs, setConfigs] = useState<PrinterConfig[]>([]);

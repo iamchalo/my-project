@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ProductGrid } from '@/components/cashier/product-grid';
 import { OrderCart, OrderItem } from '@/components/cashier/order-cart';
 import { useAuth } from '@/lib/auth/auth-context';
-import { createClient } from '@/lib/supabase/client';
+import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Loader2, Banknote, Smartphone } from 'lucide-react';
 import { Notification, useNotification } from '@/components/ui/notification';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,7 +26,7 @@ interface Product {
 
 export default function CashierOrdersPage() {
   const { profile } = useAuth();
-  const supabase = createClient();
+  const supabase = useClerkSupabaseClient();
   const { notification, showNotification, hideNotification } = useNotification();
 
   const [products, setProducts] = useState<Product[]>([]);
