@@ -21,6 +21,12 @@ import {
   BanknoteIcon,
   CrownIcon,
 } from 'lucide-react';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid,
+  Tooltip, Legend, ResponsiveContainer,
+} from 'recharts';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DashboardStats {
   totalRevenue: number;
@@ -46,14 +52,74 @@ interface DailySales {
   orders: number;
 }
 
-interface BranchPerformance {
-  id: string;
-  name: string;
-  code: string;
-  revenue: number;
-  orders: number;
+interface BranchSalesPoint {
+  date: string;
+  label: string;
+  [branchName: string]: number | string;
 }
 
+interface Branch { id: string; name: string; code: string; }
+
+// ─── Branch colours ───────────────────────────────────────────────────────────
+
+const BRANCH_COLORS = [
+  '#6366f1',
+  '#f59e0b',
+  '#10b981',
+  '#ef4444',
+  '#8b5cf6',
+  '#06b6d4',
+  '#f97316',
+];
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+const getKenyaDate = () =>
+  new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
+
+const subtractDays = (date: string, days: number) => {
+  const d = new Date(date + 'T00:00:00');
+  d.setDate(d.getDate() - days);
+  return d.toLocaleDateString('en-CA');
+};
+
+const formatLabel = (date: string, range: string) => {
+  const d = new Date(date + 'T00:00:00');
+  if (range === '7d' || range === '30d') {
+    return d.toLocaleDateString('en-KE', { month: 'short', day: 'numeric' });
+  }
+  return d.toLocaleDateString('en-KE', { month: 'short', year: '2-digit' });
+};
+
+const RANGES = [
+  { key: '7d',  label: '7 Days' },
+  { key: '30d', label: '30 Days' },
+  { key: '90d', label: '90 Days' },
+];
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-background border rounded-xl shadow-lg p-3 text-sm min-w-[160px]">
+      <p className="font-semibold mb-2 text-foreground">{label}</p>
+      {payload.map((entry: any) => (
+        <div key={entry.dataKey} className="flex items-center justify-between gap-4">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: entry.color }} />
+            <span className="text-muted-foreground">{entry.dataKey}</span>
+          </span>
+          <span className="font-medium text-foreground">
+            KSh {Number(entry.value).toLocaleString('en-US', { minimumFractionDigits: 0 })}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function SuperadminDashboard() {
   const { profile, loading: authLoading } = useAuth();
@@ -62,21 +128,18 @@ export default function SuperadminDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [dailySales, setDailySales] = useState<DailySales[]>([]);
-  const [branchPerformance, setBranchPerformance] = useState<BranchPerformance[]>([]);
 
-  const getKenyaDate = () => {
-    const now = new Date();
-    return now.toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
-  };
+  // Chart state
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [chartData, setChartData] = useState<BranchSalesPoint[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [range, setRange] = useState<'7d' | '30d' | '90d'>('30d');
 
   const getDateRange = (days: number) => {
     const end = new Date();
     const start = new Date();
     start.setDate(start.getDate() - days);
-    return {
-      start: start.toISOString(),
-      end: end.toISOString(),
-    };
+    return { start: start.toISOString(), end: end.toISOString() };
   };
 
   const fetchDashboardData = async () => {
@@ -93,106 +156,46 @@ export default function SuperadminDashboard() {
         expensesResult,
         dailySalesResult,
       ] = await Promise.all([
-        supabase
-          .from('orders')
-          .select('total_amount, payment_method')
-          .gte('created_at', thirtyDaysAgo),
-
-        supabase
-          .from('orders')
-          .select('total_amount, payment_method')
-          .gte('created_at', `${today}T00:00:00`),
-
-        supabase
-          .from('profiles')
-          .select('id, is_active, role')
-          .in('role', ['cashier', 'manager', 'admin', 'superadmin']),
-
-        supabase
-          .from('branches')
-          .select('id, is_active, name, code'),
-
-        supabase
-          .from('expenses')
-          .select('total')
-          .gte('created_at', thirtyDaysAgo),
-
-        supabase
-          .from('orders')
-          .select('created_at, total_amount')
-          .gte('created_at', getDateRange(7).start)
-          .order('created_at', { ascending: true }),
-
+        supabase.from('orders').select('total_amount, payment_method').gte('created_at', thirtyDaysAgo),
+        supabase.from('orders').select('total_amount, payment_method').gte('created_at', `${today}T00:00:00`),
+        supabase.from('profiles').select('id, is_active, role').in('role', ['cashier', 'manager', 'admin', 'superadmin']),
+        supabase.from('branches').select('id, is_active, name, code'),
+        supabase.from('expenses').select('total').gte('created_at', thirtyDaysAgo),
+        supabase.from('orders').select('created_at, total_amount').gte('created_at', getDateRange(7).start).order('created_at', { ascending: true }),
       ]);
 
       const orders = ordersResult.data || [];
       const todayOrders = todayOrdersResult.data || [];
       const profiles = profilesResult.data || [];
-      const branches = branchesResult.data || [];
+      const branchList = branchesResult.data || [];
       const expenses = expensesResult.data || [];
 
-      const totalRevenue = orders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const cashRevenue = orders.filter(o => o.payment_method === 'cash').reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const mpesaRevenue = orders.filter(o => o.payment_method === 'mpesa').reduce((sum, o) => sum + (o.total_amount || 0), 0);
-      const totalExpenses = expenses.reduce((sum, e) => sum + (e.total || 0), 0);
-
       setStats({
-        totalRevenue,
-        todayRevenue,
-        totalOrders: orders.length,
-        todayOrders: todayOrders.length,
-        totalEmployees: profiles.length,
+        totalRevenue:    orders.reduce((s, o) => s + (o.total_amount || 0), 0),
+        todayRevenue:    todayOrders.reduce((s, o) => s + (o.total_amount || 0), 0),
+        totalOrders:     orders.length,
+        todayOrders:     todayOrders.length,
+        totalEmployees:  profiles.length,
         activeEmployees: profiles.filter(p => p.is_active).length,
-        totalBranches: branches.length,
-        activeBranches: branches.filter(b => b.is_active).length,
-        cashRevenue,
-        mpesaRevenue,
-        totalExpenses,
-        cashiers: profiles.filter(p => p.role === 'cashier').length,
-        managers: profiles.filter(p => p.role === 'manager').length,
-        admins: profiles.filter(p => p.role === 'admin').length,
-        superadmins: profiles.filter(p => p.role === 'superadmin').length,
+        totalBranches:   branchList.length,
+        activeBranches:  branchList.filter(b => b.is_active).length,
+        cashRevenue:     orders.filter(o => o.payment_method === 'cash').reduce((s, o) => s + (o.total_amount || 0), 0),
+        mpesaRevenue:    orders.filter(o => o.payment_method === 'mpesa').reduce((s, o) => s + (o.total_amount || 0), 0),
+        totalExpenses:   expenses.reduce((s, e) => s + (e.total || 0), 0),
+        cashiers:        profiles.filter(p => p.role === 'cashier').length,
+        managers:        profiles.filter(p => p.role === 'manager').length,
+        admins:          profiles.filter(p => p.role === 'admin').length,
+        superadmins:     profiles.filter(p => p.role === 'superadmin').length,
       });
 
       const salesByDay: Record<string, { total: number; orders: number }> = {};
       (dailySalesResult.data || []).forEach((order: any) => {
         const date = new Date(order.created_at).toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
-        if (!salesByDay[date]) {
-          salesByDay[date] = { total: 0, orders: 0 };
-        }
+        if (!salesByDay[date]) salesByDay[date] = { total: 0, orders: 0 };
         salesByDay[date].total += order.total_amount || 0;
         salesByDay[date].orders += 1;
       });
-
-      const dailySalesArray = Object.entries(salesByDay)
-        .map(([date, data]) => ({ date, ...data }))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      setDailySales(dailySalesArray);
-
-      const branchPerfResult = await supabase
-        .from('orders')
-        .select('branch_id, total_amount, branches!inner(id, name, code)')
-        .gte('created_at', thirtyDaysAgo);
-
-      const branchStats: Record<string, BranchPerformance> = {};
-      (branchPerfResult.data || []).forEach((order: any) => {
-        const branchId = order.branch_id;
-        if (!branchStats[branchId]) {
-          branchStats[branchId] = {
-            id: branchId,
-            name: order.branches?.name || 'Unknown',
-            code: order.branches?.code || '???',
-            revenue: 0,
-            orders: 0,
-          };
-        }
-        branchStats[branchId].revenue += order.total_amount || 0;
-        branchStats[branchId].orders += 1;
-      });
-
-      const branchPerfArray = Object.values(branchStats).sort((a, b) => b.revenue - a.revenue);
-      setBranchPerformance(branchPerfArray);
+      setDailySales(Object.entries(salesByDay).map(([date, data]) => ({ date, ...data })).sort((a, b) => a.date.localeCompare(b.date)));
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -201,13 +204,90 @@ export default function SuperadminDashboard() {
     }
   };
 
+  const fetchChartData = async (selectedRange: '7d' | '30d' | '90d') => {
+    setChartLoading(true);
+    const days = selectedRange === '7d' ? 7 : selectedRange === '30d' ? 30 : 90;
+    const today = getKenyaDate();
+    const from  = subtractDays(today, days - 1);
+
+    const [branchRes, ordersRes] = await Promise.all([
+      supabase.from('branches').select('id, name, code').eq('is_active', true).order('name'),
+      supabase.from('orders').select('branch_id, total_amount, created_at')
+        .gte('created_at', `${from}T00:00:00`)
+        .lte('created_at', `${today}T23:59:59`),
+    ]);
+
+    const branchList = branchRes.data || [];
+    const orders     = ordersRes.data || [];
+    setBranches(branchList);
+
+    const dateRange: string[] = [];
+    const cur = new Date(from + 'T00:00:00');
+    const end = new Date(today + 'T00:00:00');
+    while (cur <= end) {
+      dateRange.push(cur.toLocaleDateString('en-CA'));
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const salesMap: Record<string, Record<string, number>> = {};
+    orders.forEach((o: any) => {
+      const date = new Date(o.created_at).toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' });
+      const bid  = o.branch_id;
+      if (!salesMap[date]) salesMap[date] = {};
+      salesMap[date][bid] = (salesMap[date][bid] || 0) + (o.total_amount || 0);
+    });
+
+    let points: BranchSalesPoint[];
+    if (selectedRange === '90d') {
+      const weeks: Record<string, Record<string, number>> = {};
+      dateRange.forEach(date => {
+        const d   = new Date(date + 'T00:00:00');
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const mon = new Date(d.setDate(diff));
+        const weekKey = mon.toLocaleDateString('en-CA');
+        if (!weeks[weekKey]) weeks[weekKey] = {};
+        branchList.forEach(b => {
+          weeks[weekKey][b.id] = (weeks[weekKey][b.id] || 0) + (salesMap[date]?.[b.id] || 0);
+        });
+      });
+      points = Object.entries(weeks)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, byBranch]) => {
+          const point: BranchSalesPoint = { date, label: formatLabel(date, selectedRange) };
+          branchList.forEach(b => { point[b.name] = byBranch[b.id] || 0; });
+          return point;
+        });
+    } else {
+      points = dateRange.map(date => {
+        const point: BranchSalesPoint = { date, label: formatLabel(date, selectedRange) };
+        branchList.forEach(b => { point[b.name] = salesMap[date]?.[b.id] || 0; });
+        return point;
+      });
+    }
+
+    setChartData(points);
+    setChartLoading(false);
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([fetchDashboardData(), fetchChartData(range)]);
+  };
+
+  const handleRangeChange = (r: '7d' | '30d' | '90d') => {
+    setRange(r);
+    fetchChartData(r);
+  };
+
   useEffect(() => {
-    if (!authLoading) fetchDashboardData();
+    if (!authLoading) {
+      fetchDashboardData();
+      fetchChartData('30d');
+    }
   }, [authLoading]);
 
-  const formatCurrency = (amount: number) => {
-    return `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
-  };
+  const formatCurrency = (amount: number) =>
+    `Ksh ${amount.toLocaleString('en-KE', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   if (loading) {
     return (
@@ -223,24 +303,22 @@ export default function SuperadminDashboard() {
   }
 
   const maxDailySale = Math.max(...dailySales.map(d => d.total), 1);
-  const maxBranchRevenue = Math.max(...branchPerformance.map(b => b.revenue), 1);
 
   return (
     <DashboardLayout userName={profile?.full_name || 'Superadmin'} userRole="superadmin">
       <div className="p-4 md:p-8">
         <div className="max-w-7xl mx-auto space-y-6">
+
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex items-center gap-2">
               <CrownIcon className="h-8 w-8 text-amber-500" />
               <div>
                 <h1 className="text-3xl font-bold">Superadmin Dashboard</h1>
-                <p className="text-muted-foreground">
-                  Complete system oversight and control
-                </p>
+                <p className="text-muted-foreground">Complete system oversight and control</p>
               </div>
             </div>
-            <Button onClick={fetchDashboardData} variant="outline" size="sm">
+            <Button onClick={handleRefresh} variant="outline" size="sm">
               <RefreshCwIcon className="h-4 w-4 mr-2" />
               Refresh
             </Button>
@@ -380,10 +458,7 @@ export default function SuperadminDashboard() {
                     {dailySales.map((day) => {
                       const percentage = (day.total / maxDailySale) * 100;
                       const date = new Date(day.date).toLocaleDateString('en-KE', {
-                        timeZone: 'Africa/Nairobi',
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
+                        timeZone: 'Africa/Nairobi', weekday: 'short', month: 'short', day: 'numeric',
                       });
                       return (
                         <div key={day.date} className="space-y-1">
@@ -396,9 +471,7 @@ export default function SuperadminDashboard() {
                               className="h-full bg-primary transition-all duration-500 rounded-md flex items-center justify-end pr-2"
                               style={{ width: `${Math.max(percentage, 5)}%` }}
                             >
-                              <span className="text-xs text-primary-foreground font-medium">
-                                {day.orders} orders
-                              </span>
+                              <span className="text-xs text-primary-foreground font-medium">{day.orders} orders</span>
                             </div>
                           </div>
                         </div>
@@ -420,10 +493,10 @@ export default function SuperadminDashboard() {
               <CardContent>
                 <div className="space-y-4">
                   {[
-                    { role: 'Cashiers', count: stats?.cashiers || 0, color: 'bg-blue-500' },
-                    { role: 'Managers', count: stats?.managers || 0, color: 'bg-green-500' },
-                    { role: 'Admins', count: stats?.admins || 0, color: 'bg-amber-500' },
-                    { role: 'Superadmins', count: stats?.superadmins || 0, color: 'bg-red-500' },
+                    { role: 'Cashiers',   count: stats?.cashiers || 0,    color: 'bg-blue-500' },
+                    { role: 'Managers',   count: stats?.managers || 0,    color: 'bg-green-500' },
+                    { role: 'Admins',     count: stats?.admins || 0,      color: 'bg-amber-500' },
+                    { role: 'Superadmins',count: stats?.superadmins || 0, color: 'bg-red-500' },
                   ].map((item) => {
                     const percentage = stats?.totalEmployees ? (item.count / stats.totalEmployees) * 100 : 0;
                     return (
@@ -433,10 +506,7 @@ export default function SuperadminDashboard() {
                           <span className="font-medium">{item.count}</span>
                         </div>
                         <div className="w-full bg-secondary rounded-full h-2">
-                          <div
-                            className={`${item.color} h-2 rounded-full transition-all duration-500`}
-                            style={{ width: `${percentage}%` }}
-                          />
+                          <div className={`${item.color} h-2 rounded-full transition-all duration-500`} style={{ width: `${percentage}%` }} />
                         </div>
                       </div>
                     );
@@ -446,58 +516,85 @@ export default function SuperadminDashboard() {
             </Card>
           </div>
 
-          {/* Branch Performance */}
+          {/* Branch Performance Line Chart */}
           <Card>
             <CardHeader className="pb-2">
-              <div className="flex items-center gap-2">
-                <BuildingIcon className="h-5 w-5 text-muted-foreground" />
-                <CardTitle className="text-lg">Branch Performance (Last 30 Days)</CardTitle>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <BuildingIcon className="h-5 w-5 text-muted-foreground" />
+                    Branch Performance
+                  </CardTitle>
+                  <p className="text-sm text-muted-foreground mt-0.5">Revenue per branch over time</p>
+                </div>
+                {/* Range selector */}
+                <div className="flex gap-1 p-1 bg-muted rounded-lg self-start sm:self-auto">
+                  {RANGES.map(r => (
+                    <button
+                      key={r.key}
+                      onClick={() => handleRangeChange(r.key as any)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        range === r.key
+                          ? 'bg-background shadow text-foreground'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </CardHeader>
             <CardContent>
-              {branchPerformance.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-muted-foreground">
-                  No branch data available
+              {chartLoading ? (
+                <div className="relative h-80 w-full overflow-hidden rounded-md bg-muted/50 animate-pulse" />
+              ) : chartData.length === 0 || branches.length === 0 ? (
+                <div className="h-80 flex items-center justify-center text-muted-foreground">
+                  No sales data for this period
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {branchPerformance.map((branch, index) => {
-                    const percentage = (branch.revenue / maxBranchRevenue) * 100;
-                    const colors = [
-                      'bg-blue-500',
-                      'bg-green-500',
-                      'bg-purple-500',
-                      'bg-orange-500',
-                      'bg-pink-500',
-                      'bg-cyan-500',
-                      'bg-indigo-500',
-                    ];
-                    return (
-                      <div key={branch.id} className="space-y-1">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">{branch.code}</Badge>
-                            <span className="text-sm font-medium">{branch.name}</span>
-                          </div>
-                          <span className="text-sm font-semibold">{formatCurrency(branch.revenue)}</span>
-                        </div>
-                        <div className="h-3 bg-secondary rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${colors[index % colors.length]} transition-all duration-500 rounded-full`}
-                            style={{ width: `${percentage}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-muted-foreground">{branch.orders} orders</p>
-                      </div>
-                    );
-                  })}
-                </div>
+                <ResponsiveContainer width="100%" height={340}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" stroke="currentColor" opacity={0.2} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      interval="preserveStartEnd"
+                      className="text-muted-foreground"
+                    />
+                    <YAxis
+                      tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                      tick={{ fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={50}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      iconType="circle"
+                      iconSize={8}
+                      wrapperStyle={{ fontSize: '12px', paddingTop: '16px' }}
+                    />
+                    {branches.map((b, i) => (
+                      <Line
+                        key={b.id}
+                        type="monotone"
+                        dataKey={b.name}
+                        stroke={BRANCH_COLORS[i % BRANCH_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 5, strokeWidth: 0 }}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
 
-
-          {/* System Health removed */}
         </div>
       </div>
     </DashboardLayout>
