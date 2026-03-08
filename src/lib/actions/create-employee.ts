@@ -38,6 +38,7 @@ export async function createEmployee(data: CreateEmployeeData): Promise<CreateEm
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .insert({
+        id: crypto.randomUUID(),
         clerk_id: clerkUser.id,
         email: data.email,
         full_name: data.full_name,
