@@ -315,7 +315,6 @@ export default function SuperadminDashboard() {
               <CrownIcon className="h-8 w-8 text-amber-500" />
               <div>
                 <h1 className="text-3xl font-bold">Superadmin Dashboard</h1>
-                <p className="text-muted-foreground">Complete system oversight and control</p>
               </div>
             </div>
             <Button onClick={handleRefresh} variant="outline" size="sm">
