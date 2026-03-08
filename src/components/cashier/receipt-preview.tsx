@@ -27,7 +27,7 @@ export function ReceiptPreview({
   items,
   total,
   paymentMethod,
-  branchName = 'KFries POS',
+  branchName = 'KFries',
   cashierName,
 }: ReceiptPreviewProps) {
   const branchPhone = branchName ? BRANCH_PHONES[branchName] : undefined;
@@ -47,7 +47,7 @@ export function ReceiptPreview({
       {/* Header */}
       <div className="bg-gray-900 text-white text-center py-3 px-4 space-y-0.5">
         <p className="text-base font-bold tracking-widest uppercase">{branchName}</p>
-        {branchPhone && <p className="text-[10px] text-gray-300 tracking-wide">{branchPhone}</p>}
+        {branchPhone && <p className="text-sm font-bold text-white tracking-widest">{branchPhone}</p>}
       </div>
 
       <div className="px-4 py-3 space-y-1">
