@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { useSignIn } from '@clerk/nextjs/legacy';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Notification, useNotification } from '@/components/ui/notification';
@@ -147,6 +148,11 @@ export default function LoginPage() {
                 <><LogIn className="h-4 w-4" />Sign In</>
               )}
             </Button>
+            <div className="text-center">
+              <Link href="/forgot-password" className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
           </form>
 
         </CardContent>

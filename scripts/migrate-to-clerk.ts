@@ -10,7 +10,18 @@
  *   Set CLERK_SECRET_KEY in your .env.local (script reads it via dotenv)
  */
 
-import 'dotenv/config';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Load .env.local first (Next.js convention), fall back to .env
+const envLocalPath = path.resolve(process.cwd(), '.env.local');
+const envPath = path.resolve(process.cwd(), '.env');
+if (fs.existsSync(envLocalPath)) {
+  dotenv.config({ path: envLocalPath });
+} else {
+  dotenv.config({ path: envPath });
+}
 import { createClerkClient } from '@clerk/backend';
 
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY! });
@@ -52,8 +63,7 @@ async function createTestUser(u: UserRow): Promise<Result> {
     firstName: u.firstName,
     lastName: u.lastName || undefined,
     password: TEST_PASSWORD,
-    // Skip email verification so the account is immediately usable
-    skipPasswordChecks: true,
+    skipPasswordRequirement: true,
   });
   return { supabaseId: u.supabaseId, clerkId: created.id, email: u.email };
 }
@@ -64,12 +74,8 @@ async function createRealUser(u: UserRow): Promise<Result> {
     emailAddress: [u.email],
     firstName: u.firstName,
     lastName: u.lastName || undefined,
-    // Random password — user will use "Forgot password?" on first login
-    // Clerk will email them a reset link automatically if you call
-    // clerk.users.createUser with skipPasswordRequirement: false + no password
-    // (they set it themselves before their first login)
     password: `Temp-${crypto.randomUUID().slice(0, 8)}!`,
-    skipPasswordChecks: true,
+    skipPasswordRequirement: true,
   });
   return { supabaseId: u.supabaseId, clerkId: created.id, email: u.email };
 }
@@ -117,7 +123,8 @@ async function main() {
           console.log(`    Found: ${r.clerkId}`);
         }
       } else {
-        console.error(`    FAILED for ${u.email}:`, err.errors?.[0]?.message ?? err.message);
+        const detail = err.errors?.[0]?.longMessage ?? err.errors?.[0]?.message ?? err.message ?? JSON.stringify(err);
+        console.error(`    FAILED for ${u.email}: ${detail}`);
       }
     }
   }
@@ -140,7 +147,8 @@ async function main() {
           console.log(`    Found: ${r.clerkId}`);
         }
       } else {
-        console.error(`    FAILED for ${u.email}:`, err.errors?.[0]?.message ?? err.message);
+        const detail = err.errors?.[0]?.longMessage ?? err.errors?.[0]?.message ?? err.message ?? JSON.stringify(err);
+        console.error(`    FAILED for ${u.email}: ${detail}`);
       }
     }
   }
