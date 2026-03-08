@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useSignIn, useClerk } from '@clerk/nextjs';
+import { useClerk } from '@clerk/nextjs';
+import { useSignIn } from '@clerk/nextjs/legacy';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
