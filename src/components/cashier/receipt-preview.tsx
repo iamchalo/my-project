@@ -108,8 +108,8 @@ export function ReceiptPreview({
             <span className="text-black">Ksh {total.toLocaleString()}</span>
           </div>
           <div className="flex justify-between text-gray-500">
-            <span>Tax (0%)</span>
-            <span className="text-black">Ksh 0</span>
+            <span>Tax (16%)</span>
+            <span className="text-black">Ksh {Math.round(total * 0.16 / 1.16).toLocaleString()}</span>
           </div>
         </div>
 
@@ -144,7 +144,6 @@ export function ReceiptPreview({
         <div className="text-center text-gray-500 text-[10px] space-y-0.5 pt-1 pb-2">
           <p className="font-semibold text-black">Thank you for your order!</p>
           <p>Please come again</p>
-          <p className="mt-1 text-gray-400">** RECEIPT PREVIEW **</p>
         </div>
       </div>
     </div>
