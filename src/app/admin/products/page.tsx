@@ -37,6 +37,7 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Form state
@@ -192,6 +193,60 @@ export default function AdminProductsPage() {
     }
   };
 
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct || !productName.trim() || !basePrice) {
+      showNotification('error', 'Please fill in all required fields');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      let uploadedImageUrl: string | null = editingProduct.image_url;
+      if (imageFile) {
+        uploadedImageUrl = await uploadImage(imageFile);
+        if (!uploadedImageUrl) return;
+      }
+
+      const { error } = await supabase
+        .from('products')
+        .update({
+          product_name: productName.trim(),
+          category,
+          base_price: parseFloat(basePrice),
+          image_url: uploadedImageUrl,
+        })
+        .eq('product_id', editingProduct.product_id);
+
+      if (error) throw error;
+
+      showNotification('success', 'Product updated successfully!');
+      setShowEditModal(false);
+      resetForm();
+      await fetchProducts();
+    } catch (error: any) {
+      console.error('Error updating product:', error);
+      if (error.code === '23505') {
+        showNotification('error', 'A product with this name already exists');
+      } else {
+        showNotification('error', 'Failed to update product');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setProductName(product.product_name);
+    setCategory(product.category);
+    setBasePrice(product.base_price.toString());
+    setImagePreview(product.image_url);
+    setImageFile(null);
+    setShowEditModal(true);
+  };
+
   const resetForm = () => {
     setProductName('');
     setCategory('Meals');
@@ -260,7 +315,7 @@ export default function AdminProductsPage() {
                           </div>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" className="gap-2">
+                      <Button variant="outline" size="sm" className="gap-2" onClick={() => openEditModal(product)}>
                         <Edit className="h-4 w-4" />
                         Edit
                       </Button>
@@ -418,6 +473,117 @@ export default function AdminProductsPage() {
                         <>
                           <PlusIcon className="h-4 w-4" />
                           Create Product
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+      {/* Edit Product Modal */}
+      {showEditModal && editingProduct && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-50"
+            onClick={() => {
+              setShowEditModal(false);
+              resetForm();
+            }}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-lg">
+              <CardHeader>
+                <CardTitle>Edit Product</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleEditProduct} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Product Name *</label>
+                    <input
+                      type="text"
+                      value={productName}
+                      onChange={(e) => setProductName(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg"
+                      placeholder="e.g., Chicken Burger"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Category *</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg"
+                    >
+                      <option value="Meals">Meals</option>
+                      <option value="Drinks&Juices">Drinks & Juices</option>
+                      <option value="Specials">Specials</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Base Price (KSh) *</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={basePrice}
+                      onChange={(e) => setBasePrice(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Product Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="w-full px-4 py-2 border rounded-lg"
+                      disabled={uploading}
+                    />
+                    {imagePreview && (
+                      <div className="mt-2">
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
+                          className="w-32 h-32 object-cover rounded-lg border"
+                        />
+                      </div>
+                    )}
+                    {uploading && (
+                      <p className="text-sm text-blue-600 mt-2">Uploading image...</p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowEditModal(false);
+                        resetForm();
+                      }}
+                      disabled={submitting}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={submitting} className="gap-2">
+                      {submitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="h-4 w-4" />
+                          Save Changes
                         </>
                       )}
                     </Button>
