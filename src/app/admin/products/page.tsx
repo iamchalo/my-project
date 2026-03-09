@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { Loader2, PlusIcon, Edit, Check, X } from 'lucide-react';
 import { useNotification } from '@/components/ui/notification';
+import { uploadProductImage } from '@/lib/actions/upload-product-image';
 
 interface Product {
   product_id: string;
@@ -84,28 +85,11 @@ export default function AdminProductsPage() {
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
       setUploading(true);
-
-      // Generate unique filename
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = fileName;
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
+      const formData = new FormData();
+      formData.append('file', file);
+      const result = await uploadProductImage(formData);
+      if ('error' in result) throw new Error(result.error);
+      return result.url;
     } catch (error) {
       console.error('Error uploading image:', error);
       showNotification('error', 'Failed to upload image');
