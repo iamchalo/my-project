@@ -164,20 +164,23 @@ export default function CashierOrdersPage() {
         return;
       }
 
-      // Fetch branch name fresh at print time to avoid stale closure
+      // Fetch branch name + phone fresh at print time to avoid stale closure
       let resolvedBranchName = branchName;
-      if (!resolvedBranchName && profile?.branch_id) {
+      let resolvedBranchPhone: string | undefined;
+      if (profile?.branch_id) {
         const { data: branchData } = await supabase
           .from('branches')
-          .select('name')
+          .select('name, phone')
           .eq('id', profile.branch_id)
           .single();
-        resolvedBranchName = branchData?.name || undefined;
+        resolvedBranchName = branchData?.name || resolvedBranchName;
+        resolvedBranchPhone = branchData?.phone || undefined;
       }
 
       const now = new Date();
       const lines = buildReceiptLines({
         branchName: resolvedBranchName || 'Branch',
+        branchPhone: resolvedBranchPhone,
         cashierName: profile?.full_name || 'Staff',
         orderNumber: orderData.orderNumber,
         items: orderData.items.map((i) => ({
