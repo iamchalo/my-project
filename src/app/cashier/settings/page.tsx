@@ -19,6 +19,13 @@ export default function CashierSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Printer state
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState('');
+  const [savedPrinter, setSavedPrinter] = useState('');
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [savingPrinter, setSavingPrinter] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     full_name: profile?.full_name || '',

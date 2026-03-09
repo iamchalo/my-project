@@ -6,8 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
-import { UserIcon, ShieldIcon, DatabaseIcon, EyeIcon, Loader2 } from 'lucide-react';
+import { UserIcon, ShieldIcon, DatabaseIcon, EyeIcon, Loader2, PrinterIcon, RefreshCwIcon } from 'lucide-react';
 import { ThemeDropdown } from '@/components/ui/theme-dropdown';
+import { connect as connectQZ, getPrinters } from '@/lib/printing/qz-tray';
 
 export default function SuperadminSettingsPage() {
   const { profile } = useAuth();
@@ -19,6 +20,15 @@ export default function SuperadminSettingsPage() {
   // Form state — initialised empty; synced from profile once it loads
   const [formData, setFormData] = useState({ full_name: '', phone: '' });
 
+  // Printer state
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  const [printerBranch, setPrinterBranch] = useState('');
+  const [availablePrinters, setAvailablePrinters] = useState<string[]>([]);
+  const [selectedPrinter, setSelectedPrinter] = useState('');
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+  const [savingPrinter, setSavingPrinter] = useState(false);
+  const [printerConfigs, setPrinterConfigs] = useState<Record<string, string>>({}); // branch_id -> printer_name
+
   useEffect(() => {
     if (profile) {
       setFormData({
@@ -27,6 +37,72 @@ export default function SuperadminSettingsPage() {
       });
     }
   }, [profile]);
+
+  // Load branches and existing printer configs
+  useEffect(() => {
+    const load = async () => {
+      const { data: branchData } = await supabase
+        .from('branches')
+        .select('id, name')
+        .eq('is_active', true)
+        .order('name');
+      if (branchData) setBranches(branchData);
+
+      const { data: configs } = await supabase
+        .from('printer_configs')
+        .select('branch_id, printer_name')
+        .eq('is_active', true);
+      if (configs) {
+        const map: Record<string, string> = {};
+        configs.forEach((c: any) => { map[c.branch_id] = c.printer_name; });
+        setPrinterConfigs(map);
+      }
+    };
+    load();
+  }, []);
+
+  const handleLoadPrinters = async () => {
+    setLoadingPrinters(true);
+    setAvailablePrinters([]);
+    try {
+      const connected = await connectQZ();
+      if (!connected) {
+        showNotification('error', 'QZ Tray not running on this machine');
+        return;
+      }
+      const list = await getPrinters();
+      setAvailablePrinters(list);
+      if (printerBranch && printerConfigs[printerBranch]) {
+        setSelectedPrinter(printerConfigs[printerBranch]);
+      }
+    } catch {
+      showNotification('error', 'Failed to load printers');
+    } finally {
+      setLoadingPrinters(false);
+    }
+  };
+
+  const handleSavePrinter = async () => {
+    if (!printerBranch || !selectedPrinter) {
+      showNotification('error', 'Select a branch and printer');
+      return;
+    }
+    setSavingPrinter(true);
+    try {
+      const { error } = await supabase.from('printer_configs').upsert({
+        branch_id: printerBranch,
+        printer_name: selectedPrinter,
+        is_active: true,
+      }, { onConflict: 'branch_id' });
+      if (error) throw error;
+      setPrinterConfigs(prev => ({ ...prev, [printerBranch]: selectedPrinter }));
+      showNotification('success', 'Printer saved for branch');
+    } catch {
+      showNotification('error', 'Failed to save printer');
+    } finally {
+      setSavingPrinter(false);
+    }
+  };
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -194,6 +270,88 @@ export default function SuperadminSettingsPage() {
                   <p className="text-sm text-green-600">Connected</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Printer Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <PrinterIcon className="h-5 w-5" />
+                <CardTitle>Receipt Printer Settings</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Configure the receipt printer for each branch. QZ Tray must be running on the machine where printing happens.
+              </p>
+
+              {/* Existing configs summary */}
+              {Object.keys(printerConfigs).length > 0 && (
+                <div className="rounded-lg border p-3 space-y-1 bg-muted/30">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Configured Printers</p>
+                  {branches.filter(b => printerConfigs[b.id]).map(b => (
+                    <div key={b.id} className="flex justify-between text-sm">
+                      <span className="font-medium">{b.name}</span>
+                      <span className="text-muted-foreground">{printerConfigs[b.id]}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Branch</label>
+                  <select
+                    value={printerBranch}
+                    onChange={e => { setPrinterBranch(e.target.value); setSelectedPrinter(printerConfigs[e.target.value] || ''); setAvailablePrinters([]); }}
+                    className="w-full px-4 py-2 border rounded-lg bg-background"
+                  >
+                    <option value="">Select branch...</option>
+                    {branches.map(b => (
+                      <option key={b.id} value={b.id}>{b.name}{printerConfigs[b.id] ? ` (${printerConfigs[b.id]})` : ''}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    variant="outline"
+                    onClick={handleLoadPrinters}
+                    disabled={!printerBranch || loadingPrinters}
+                    className="w-full gap-2"
+                  >
+                    {loadingPrinters ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCwIcon className="h-4 w-4" />}
+                    {loadingPrinters ? 'Scanning...' : 'Scan Printers'}
+                  </Button>
+                </div>
+              </div>
+
+              {availablePrinters.length > 0 && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Select Printer</label>
+                    <select
+                      value={selectedPrinter}
+                      onChange={e => setSelectedPrinter(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg bg-background"
+                    >
+                      <option value="">Select printer...</option>
+                      {availablePrinters.map(p => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button onClick={handleSavePrinter} disabled={!selectedPrinter || savingPrinter} className="gap-2">
+                      {savingPrinter ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : <><PrinterIcon className="h-4 w-4" />Save Printer</>}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {availablePrinters.length === 0 && printerBranch && !loadingPrinters && (
+                <p className="text-sm text-muted-foreground">Click "Scan Printers" to detect printers connected to this machine via QZ Tray.</p>
+              )}
             </CardContent>
           </Card>
 
