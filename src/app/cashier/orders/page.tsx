@@ -164,9 +164,20 @@ export default function CashierOrdersPage() {
         return;
       }
 
+      // Fetch branch name fresh at print time to avoid stale closure
+      let resolvedBranchName = branchName;
+      if (!resolvedBranchName && profile?.branch_id) {
+        const { data: branchData } = await supabase
+          .from('branches')
+          .select('name')
+          .eq('id', profile.branch_id)
+          .single();
+        resolvedBranchName = branchData?.name || undefined;
+      }
+
       const now = new Date();
       const lines = buildReceiptLines({
-        branchName: branchName || 'Branch',
+        branchName: resolvedBranchName || 'Branch',
         cashierName: profile?.full_name || 'Staff',
         orderNumber: orderData.orderNumber,
         items: orderData.items.map((i) => ({

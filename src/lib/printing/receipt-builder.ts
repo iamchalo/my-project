@@ -10,26 +10,30 @@ export interface ReceiptData {
   time: string;
 }
 
-const WIDTH = 42; // characters for 80mm paper
+const WIDTH = 48; // characters for standard 80mm thermal paper
 
 function center(text: string): string {
-  const pad = Math.max(0, Math.floor((WIDTH - text.length) / 2));
-  return ' '.repeat(pad) + text;
+  const trimmed = text.slice(0, WIDTH);
+  const pad = Math.max(0, Math.floor((WIDTH - trimmed.length) / 2));
+  return ' '.repeat(pad) + trimmed;
 }
 
 function line(char = '-'): string {
   return char.repeat(WIDTH);
 }
 
+// Right-aligns `right`, truncates `left` if needed to always fit on one line
 function row(left: string, right: string): string {
-  const gap = WIDTH - left.length - right.length;
-  return left + ' '.repeat(Math.max(1, gap)) + right;
+  const maxLeft = WIDTH - right.length - 1;
+  const safeLeft = left.length > maxLeft ? left.slice(0, maxLeft - 1) + '~' : left;
+  const gap = WIDTH - safeLeft.length - right.length;
+  return safeLeft + ' '.repeat(Math.max(1, gap)) + right;
 }
 
 export function buildReceiptLines(data: ReceiptData): string[] {
   const lines: string[] = [];
 
-  lines.push('');
+  // Header — no leading blank so branch name isn't lost in top waste area
   lines.push(center(data.branchName.toUpperCase()));
   if (data.branchPhone) lines.push(center(data.branchPhone));
   lines.push(center('RECEIPT'));
@@ -46,8 +50,9 @@ export function buildReceiptLines(data: ReceiptData): string[] {
 
   for (const item of data.items) {
     const subtotal = item.product_price * item.quantity;
+    const price = `KES ${subtotal.toFixed(2)}`;
     const nameQty = `${item.product_name} x${item.quantity}`;
-    lines.push(row(nameQty, `KES ${subtotal.toFixed(2)}`));
+    lines.push(row(nameQty, price));
   }
 
   lines.push(line());
@@ -60,7 +65,7 @@ export function buildReceiptLines(data: ReceiptData): string[] {
   lines.push(line());
   lines.push(center('Thank you for visiting!'));
   lines.push(center('Please come again'));
-  lines.push('');
+  // Feed lines before cut — enough to clear the paper jaw
   lines.push('');
   lines.push('');
 
