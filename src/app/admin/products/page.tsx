@@ -383,7 +383,7 @@ export default function AdminProductsPage() {
             }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-lg">
+            <Card className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>Add New Product</CardTitle>
               </CardHeader>
@@ -494,7 +494,7 @@ export default function AdminProductsPage() {
             }}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-lg">
+            <Card className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>Edit Product</CardTitle>
               </CardHeader>

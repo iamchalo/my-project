@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
-import { Loader2, PlusIcon, Edit, Check, X } from 'lucide-react';
+import { Loader2, PlusIcon, Edit, Check, X, Trash2 } from 'lucide-react';
 import { useNotification } from '@/components/ui/notification';
 
 interface Product {
@@ -29,7 +29,7 @@ interface BranchAvailability {
   has_assignment: boolean;
 }
 
-export default function AdminProductsPage() {
+export default function SuperadminProductsPage() {
   const { profile } = useAuth();
   const supabase = useClerkSupabaseClient();
   const { showNotification } = useNotification();
@@ -37,6 +37,8 @@ export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Form state
@@ -47,6 +49,7 @@ export default function AdminProductsPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -56,7 +59,6 @@ export default function AdminProductsPage() {
     try {
       setLoading(true);
       const { data, error } = await supabase.rpc('get_products_with_branches');
-
       if (error) throw error;
       setProducts(data || []);
     } catch (error) {
@@ -71,11 +73,8 @@ export default function AdminProductsPage() {
     const file = e.target.files?.[0];
     if (file) {
       setImageFile(file);
-      // Create preview
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
+      reader.onloadend = () => setImagePreview(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
@@ -83,27 +82,13 @@ export default function AdminProductsPage() {
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
       setUploading(true);
-
-      // Generate unique filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = fileName;
-
-      // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('product-images')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
+        .upload(fileName, file, { cacheControl: '3600', upsert: false });
       if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
-
+      const { data } = supabase.storage.from('product-images').getPublicUrl(fileName);
       return data.publicUrl;
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -116,25 +101,17 @@ export default function AdminProductsPage() {
 
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!productName.trim() || !basePrice) {
       showNotification('error', 'Please fill in all required fields');
       return;
     }
-
     try {
       setSubmitting(true);
-
-      // Upload image if provided
       let uploadedImageUrl: string | null = null;
       if (imageFile) {
         uploadedImageUrl = await uploadImage(imageFile);
-        if (!uploadedImageUrl) {
-          // Upload failed, don't proceed
-          return;
-        }
+        if (!uploadedImageUrl) return;
       }
-
       const { error } = await supabase.from('products').insert({
         product_name: productName.trim(),
         category,
@@ -142,54 +119,110 @@ export default function AdminProductsPage() {
         image_url: uploadedImageUrl,
         created_by: profile?.id,
       });
-
       if (error) throw error;
-
       showNotification('success', 'Product created successfully!');
       setShowAddModal(false);
       resetForm();
       await fetchProducts();
     } catch (error: any) {
       console.error('Error creating product:', error);
-      if (error.code === '23505') {
-        showNotification('error', 'A product with this name already exists');
-      } else {
-        showNotification('error', 'Failed to create product');
-      }
+      showNotification('error', error.code === '23505' ? 'A product with this name already exists' : 'Failed to create product');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct || !productName.trim() || !basePrice) {
+      showNotification('error', 'Please fill in all required fields');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      let uploadedImageUrl: string | null = editingProduct.image_url;
+      if (imageFile) {
+        uploadedImageUrl = await uploadImage(imageFile);
+        if (!uploadedImageUrl) return;
+      }
+      const { error } = await supabase
+        .from('products')
+        .update({
+          product_name: productName.trim(),
+          category,
+          base_price: parseFloat(basePrice),
+          image_url: uploadedImageUrl,
+        })
+        .eq('product_id', editingProduct.product_id);
+      if (error) throw error;
+      showNotification('success', 'Product updated successfully!');
+      setShowEditModal(false);
+      resetForm();
+      await fetchProducts();
+    } catch (error: any) {
+      console.error('Error updating product:', error);
+      showNotification('error', error.code === '23505' ? 'A product with this name already exists' : 'Failed to update product');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteProduct = async () => {
+    if (!editingProduct) return;
+    try {
+      setDeleting(true);
+      // Remove all branch assignments first
+      await supabase.from('branch_products').delete().eq('product_id', editingProduct.product_id);
+      // Delete the product
+      const { error } = await supabase.from('products').delete().eq('product_id', editingProduct.product_id);
+      if (error) throw error;
+      showNotification('success', 'Product deleted successfully');
+      setShowDeleteConfirm(false);
+      setShowEditModal(false);
+      resetForm();
+      await fetchProducts();
+    } catch (error: any) {
+      console.error('Error deleting product:', error);
+      showNotification('error', 'Failed to delete product');
+    } finally {
+      setDeleting(false);
     }
   };
 
   const handleToggleBranch = async (productId: string, branchId: string, currentStatus: boolean, hasAssignment: boolean) => {
     try {
       if (!hasAssignment) {
-        // Create new assignment
         const { error } = await supabase.rpc('assign_product_to_branch', {
           target_product_id: productId,
           target_branch_id: branchId,
-          price: null, // Use base price
+          price: null,
           active: true,
         });
-
         if (error) throw error;
         showNotification('success', 'Product activated at branch');
       } else {
-        // Toggle existing assignment
         const { error } = await supabase.rpc('toggle_branch_product', {
           target_product_id: productId,
           target_branch_id: branchId,
         });
-
         if (error) throw error;
         showNotification('success', currentStatus ? 'Product deactivated' : 'Product activated');
       }
-
       await fetchProducts();
     } catch (error) {
       console.error('Error toggling branch product:', error);
       showNotification('error', 'Failed to update product status');
     }
+  };
+
+  const openEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setProductName(product.product_name);
+    setCategory(product.category);
+    setBasePrice(product.base_price.toString());
+    setImagePreview(product.image_url);
+    setImageFile(null);
+    setShowEditModal(true);
   };
 
   const resetForm = () => {
@@ -200,6 +233,72 @@ export default function AdminProductsPage() {
     setImagePreview(null);
     setEditingProduct(null);
   };
+
+  const formFields = (onSubmit: (e: React.FormEvent) => void, submitLabel: string, submitIcon: React.ReactNode) => (
+    <form onSubmit={onSubmit} className="space-y-4">
+      <div>
+        <label className="text-sm font-medium mb-2 block">Product Name *</label>
+        <input
+          type="text"
+          value={productName}
+          onChange={(e) => setProductName(e.target.value)}
+          className="w-full px-4 py-2 border rounded-lg"
+          placeholder="e.g., Chicken Burger"
+          required
+        />
+      </div>
+      <div>
+        <label className="text-sm font-medium mb-2 block">Category *</label>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-4 py-2 border rounded-lg">
+          <option value="Meals">Meals</option>
+          <option value="Drinks&Juices">Drinks & Juices</option>
+          <option value="Specials">Specials</option>
+        </select>
+      </div>
+      <div>
+        <label className="text-sm font-medium mb-2 block">Base Price (KSh) *</label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={basePrice}
+          onChange={(e) => setBasePrice(e.target.value)}
+          className="w-full px-4 py-2 border rounded-lg"
+          placeholder="0.00"
+          required
+        />
+      </div>
+      <div>
+        <label className="text-sm font-medium mb-2 block">Product Image</label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleImageChange}
+          className="w-full px-4 py-2 border rounded-lg"
+          disabled={uploading}
+        />
+        {imagePreview && (
+          <div className="mt-2">
+            <img src={imagePreview} alt="Preview" className="w-32 h-32 object-cover rounded-lg border" />
+          </div>
+        )}
+        {uploading && <p className="text-sm text-blue-600 mt-2">Uploading image...</p>}
+      </div>
+      <div className="flex gap-2 justify-end pt-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
+          disabled={submitting}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={submitting || uploading} className="gap-2">
+          {submitting ? <><Loader2 className="h-4 w-4 animate-spin" />Saving...</> : <>{submitIcon}{submitLabel}</>}
+        </Button>
+      </div>
+    </form>
+  );
 
   if (loading) {
     return (
@@ -219,11 +318,9 @@ export default function AdminProductsPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold">Products Management</h1>
-              <p className="text-muted-foreground">
-                Manage products and their availability across branches
-              </p>
+              <p className="text-muted-foreground">Manage products and their availability across branches</p>
             </div>
-            <Button onClick={() => setShowAddModal(true)} className="gap-2">
+            <Button onClick={() => { resetForm(); setShowAddModal(true); }} className="gap-2">
               <PlusIcon className="h-4 w-4" />
               Add Product
             </Button>
@@ -246,11 +343,7 @@ export default function AdminProductsPage() {
                     <div className="flex justify-between items-start">
                       <div className="flex gap-4">
                         {product.image_url && (
-                          <img
-                            src={product.image_url}
-                            alt={product.product_name}
-                            className="w-16 h-16 object-cover rounded"
-                          />
+                          <img src={product.image_url} alt={product.product_name} className="w-16 h-16 object-cover rounded" />
                         )}
                         <div>
                           <CardTitle className="text-xl">{product.product_name}</CardTitle>
@@ -260,7 +353,7 @@ export default function AdminProductsPage() {
                           </div>
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" className="gap-2">
+                      <Button variant="outline" size="sm" className="gap-2" onClick={() => openEditModal(product)}>
                         <Edit className="h-4 w-4" />
                         Edit
                       </Button>
@@ -273,14 +366,7 @@ export default function AdminProductsPage() {
                         {product.branches.map((branch) => (
                           <button
                             key={branch.branch_id}
-                            onClick={() =>
-                              handleToggleBranch(
-                                product.product_id,
-                                branch.branch_id,
-                                branch.is_active,
-                                branch.has_assignment
-                              )
-                            }
+                            onClick={() => handleToggleBranch(product.product_id, branch.branch_id, branch.is_active, branch.has_assignment)}
                             className={`p-3 rounded-lg border-2 transition-all ${
                               branch.is_active
                                 ? 'border-green-500 bg-green-50 text-green-900'
@@ -301,9 +387,7 @@ export default function AdminProductsPage() {
                             </div>
                             <div className="text-xs">{branch.branch_name}</div>
                             {branch.local_price && (
-                              <div className="text-xs font-medium mt-1">
-                                KSh {branch.local_price.toFixed(2)}
-                              </div>
+                              <div className="text-xs font-medium mt-1">KSh {branch.local_price.toFixed(2)}</div>
                             )}
                           </button>
                         ))}
@@ -320,109 +404,71 @@ export default function AdminProductsPage() {
       {/* Add Product Modal */}
       {showAddModal && (
         <>
-          <div
-            className="fixed inset-0 bg-black/50 z-50"
-            onClick={() => {
-              setShowAddModal(false);
-              resetForm();
-            }}
-          />
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => { setShowAddModal(false); resetForm(); }} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <Card className="w-full max-w-lg">
+            <Card className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
               <CardHeader>
                 <CardTitle>Add New Product</CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleAddProduct} className="space-y-4">
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Product Name *</label>
-                    <input
-                      type="text"
-                      value={productName}
-                      onChange={(e) => setProductName(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg"
-                      placeholder="e.g., Chicken Burger"
-                      required
-                    />
-                  </div>
+                {formFields(handleAddProduct, 'Create Product', <PlusIcon className="h-4 w-4" />)}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
 
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Category *</label>
-                    <select
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg"
-                    >
-                      <option value="Meals">Meals</option>
-                      <option value="Drinks&Juices">Drinks & Juices</option>
-                      <option value="Specials">Specials</option>
-                    </select>
-                  </div>
+      {/* Edit Product Modal */}
+      {showEditModal && editingProduct && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-50" onClick={() => { setShowEditModal(false); resetForm(); }} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <Card className="w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <CardTitle>Edit Product</CardTitle>
+                  {/* Delete — superadmin only */}
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={deleting}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {formFields(handleEditProduct, 'Save Changes', <Edit className="h-4 w-4" />)}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
 
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Base Price (KSh) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={basePrice}
-                      onChange={(e) => setBasePrice(e.target.value)}
-                      className="w-full px-4 py-2 border rounded-lg"
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium mb-2 block">Product Image</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageChange}
-                      className="w-full px-4 py-2 border rounded-lg"
-                      disabled={uploading}
-                    />
-                    {imagePreview && (
-                      <div className="mt-2">
-                        <img
-                          src={imagePreview}
-                          alt="Preview"
-                          className="w-32 h-32 object-cover rounded-lg border"
-                        />
-                      </div>
-                    )}
-                    {uploading && (
-                      <p className="text-sm text-blue-600 mt-2">Uploading image...</p>
-                    )}
-                  </div>
-
-                  <div className="flex gap-2 justify-end pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        setShowAddModal(false);
-                        resetForm();
-                      }}
-                      disabled={submitting}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={submitting} className="gap-2">
-                      {submitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Creating...
-                        </>
-                      ) : (
-                        <>
-                          <PlusIcon className="h-4 w-4" />
-                          Create Product
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </form>
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && editingProduct && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-[60]" />
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <Card className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+              <CardHeader>
+                <CardTitle className="text-red-600">Delete Product?</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  This will permanently delete <strong>{editingProduct.product_name}</strong> and remove it from all branches. This cannot be undone.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={deleting}>
+                    Cancel
+                  </Button>
+                  <Button variant="destructive" onClick={handleDeleteProduct} disabled={deleting} className="gap-2">
+                    {deleting ? <><Loader2 className="h-4 w-4 animate-spin" />Deleting...</> : <><Trash2 className="h-4 w-4" />Delete</>}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
