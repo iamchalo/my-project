@@ -56,7 +56,11 @@ export async function printReceipt(printerName: string, lines: string[]): Promis
     if (!lib || !lib.websocket.isActive()) return;
 
     const config = lib.configs.create(printerName);
-    const data = lines.map((line) => ({ type: 'raw', format: 'plain', data: line + '\n' }));
+    const data = [
+      ...lines.map((line) => ({ type: 'raw', format: 'plain', data: line + '\n' })),
+      // ESC/POS full paper cut command (1B 69)
+      { type: 'raw', format: 'hex', data: '1B69' },
+    ];
     await lib.print(config, data);
   } catch (err) {
     console.warn('QZ Tray print error:', err);
