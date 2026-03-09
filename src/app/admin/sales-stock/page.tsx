@@ -276,7 +276,7 @@ export default function AdminSalesStockPage() {
 
   if (loading && records.length === 0) {
     return (
-      <DashboardLayout userName={profile?.full_name || 'Admin'} userRole="admin">
+      <DashboardLayout userName={profile?.full_name || (profile?.role === 'superadmin' ? 'Superadmin' : 'Admin')} userRole={(profile?.role === 'superadmin' ? 'superadmin' : 'admin') as 'admin' | 'superadmin'}>
         <div className="flex items-center justify-center h-full">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
@@ -285,7 +285,7 @@ export default function AdminSalesStockPage() {
   }
 
   return (
-    <DashboardLayout userName={profile?.full_name || 'Admin'} userRole="admin">
+    <DashboardLayout userName={profile?.full_name || (profile?.role === 'superadmin' ? 'Superadmin' : 'Admin')} userRole={(profile?.role === 'superadmin' ? 'superadmin' : 'admin') as 'admin' | 'superadmin'}>
       <div className="h-full flex flex-col">
         {/* Header */}
         <div className="px-8 pt-6 pb-4 border-b">
