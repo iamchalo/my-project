@@ -217,7 +217,7 @@ export default function AdminProductsPage() {
           base_price: parseFloat(basePrice),
           image_url: uploadedImageUrl,
         })
-        .eq('product_id', editingProduct.product_id);
+        .eq('id', editingProduct.product_id);
 
       if (error) throw error;
 
