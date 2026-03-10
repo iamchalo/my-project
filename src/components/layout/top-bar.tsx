@@ -168,11 +168,15 @@ export function TopBar({
                 <p className="text-sm font-medium">{userName}</p>
                 <p className="text-xs text-muted-foreground capitalize">{userRole}</p>
               </div>
-              {userRole === 'cashier' && hasActiveShift && onEndShiftAndLogout ? (
+              {userRole === 'cashier' ? (
                 <button
                   onClick={() => {
                     setShowDropdown(false);
-                    onEndShiftAndLogout();
+                    if (hasActiveShift && onEndShiftAndLogout) {
+                      onEndShiftAndLogout();
+                    } else {
+                      handleLogout();
+                    }
                   }}
                   className="w-full px-4 py-2 text-sm text-left hover:bg-accent transition-colors flex items-center gap-2 text-orange-600"
                 >
