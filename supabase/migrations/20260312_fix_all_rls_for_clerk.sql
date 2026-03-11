@@ -67,13 +67,16 @@ $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 -- These policies are the FIRST to break — they block profile fetch → no name shown.
 
 DROP POLICY IF EXISTS "cashiers_view_own_and_branch_cashiers" ON public.profiles;
+DROP POLICY IF EXISTS "cashiers_view_branch_cashiers"         ON public.profiles;
 DROP POLICY IF EXISTS "managers_view_branch_users"            ON public.profiles;
 DROP POLICY IF EXISTS "admins_view_all_non_superadmins"       ON public.profiles;
 DROP POLICY IF EXISTS "superadmins_view_all_users"            ON public.profiles;
 DROP POLICY IF EXISTS "cashiers_update_own_profile"           ON public.profiles;
 DROP POLICY IF EXISTS "managers_update_branch_cashiers"       ON public.profiles;
+DROP POLICY IF EXISTS "users_update_own_profile"              ON public.profiles;
 DROP POLICY IF EXISTS "admins_manage_cashiers_managers"       ON public.profiles;
 DROP POLICY IF EXISTS "superadmins_manage_all_users"          ON public.profiles;
+DROP POLICY IF EXISTS "users_view_own_profile"                ON public.profiles;
 
 -- Any authenticated user can read their own profile (needed for name/role/branch)
 CREATE POLICY "users_view_own_profile" ON public.profiles
