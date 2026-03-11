@@ -117,7 +117,20 @@ export default function AdminSalesStockPage() {
       const { data: shiftsData, error: shiftsError } = await query;
       if (shiftsError) throw shiftsError;
 
+      // Debug: log raw query result to browser console
+      console.log('[sales-stock] selectedDate:', selectedDate);
+      console.log('[sales-stock] shiftsData count:', shiftsData?.length ?? 0);
+      console.log('[sales-stock] shiftsData:', shiftsData);
+
       if (!shiftsData || shiftsData.length === 0) {
+        // Run a looser query to see what IS in the table
+        const { data: allShifts } = await supabase
+          .from('shifts')
+          .select('id, shift_number, shift_date, is_active, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        console.log('[sales-stock] Latest 5 shifts (no filter):', allShifts);
+
         setRecords([]);
         setDailySummaries([]);
         return;
