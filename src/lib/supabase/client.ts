@@ -20,6 +20,7 @@ export function useClerkSupabaseClient() {
             fetch: async (url, options = {}) => {
               const clerkToken = await getToken({ template: 'supabase' });
               const headers = new Headers((options as RequestInit).headers);
+              headers.set('apikey', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
               if (clerkToken) headers.set('Authorization', `Bearer ${clerkToken}`);
               return fetch(url, { ...(options as RequestInit), headers });
             },
