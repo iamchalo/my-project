@@ -15,7 +15,7 @@
 -- ── 1. Helper: resolve Supabase profile UUID from Clerk auth.uid() ──────────
 CREATE OR REPLACE FUNCTION public.get_my_profile_id()
 RETURNS UUID AS $$
-  SELECT id FROM public.profiles WHERE clerk_id = auth.uid() LIMIT 1;
+  SELECT id FROM public.profiles WHERE clerk_id = auth.uid()::text LIMIT 1;
 $$ LANGUAGE sql SECURITY DEFINER STABLE;
 
 GRANT EXECUTE ON FUNCTION public.get_my_profile_id() TO authenticated;
@@ -35,7 +35,7 @@ BEGIN
 
   IF jwt_role IS NOT NULL THEN RETURN jwt_role; END IF;
 
-  SELECT role INTO db_role FROM public.profiles WHERE clerk_id = auth.uid();
+  SELECT role INTO db_role FROM public.profiles WHERE clerk_id = auth.uid()::text;
   RETURN db_role;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
@@ -55,7 +55,7 @@ BEGIN
 
   IF jwt_branch IS NOT NULL THEN RETURN jwt_branch; END IF;
 
-  SELECT branch_id INTO db_branch FROM public.profiles WHERE clerk_id = auth.uid();
+  SELECT branch_id INTO db_branch FROM public.profiles WHERE clerk_id = auth.uid()::text;
   RETURN db_branch;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
