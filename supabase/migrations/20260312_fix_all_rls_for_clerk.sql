@@ -63,7 +63,98 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
--- ── 2. SHIFTS ────────────────────────────────────────────────────────────────
+-- ── 2. PROFILES ──────────────────────────────────────────────────────────────
+-- These policies are the FIRST to break — they block profile fetch → no name shown.
+
+DROP POLICY IF EXISTS "cashiers_view_own_and_branch_cashiers" ON public.profiles;
+DROP POLICY IF EXISTS "managers_view_branch_users"            ON public.profiles;
+DROP POLICY IF EXISTS "admins_view_all_non_superadmins"       ON public.profiles;
+DROP POLICY IF EXISTS "superadmins_view_all_users"            ON public.profiles;
+DROP POLICY IF EXISTS "cashiers_update_own_profile"           ON public.profiles;
+DROP POLICY IF EXISTS "managers_update_branch_cashiers"       ON public.profiles;
+DROP POLICY IF EXISTS "admins_manage_cashiers_managers"       ON public.profiles;
+DROP POLICY IF EXISTS "superadmins_manage_all_users"          ON public.profiles;
+
+-- Any authenticated user can read their own profile (needed for name/role/branch)
+CREATE POLICY "users_view_own_profile" ON public.profiles
+  FOR SELECT
+  USING (clerk_id = auth.uid()::text);
+
+-- Cashiers: view other cashiers in same branch
+CREATE POLICY "cashiers_view_branch_cashiers" ON public.profiles
+  FOR SELECT
+  USING (
+    public.get_my_role() = 'cashier'
+    AND branch_id = public.get_my_branch()
+    AND role = 'cashier'
+  );
+
+-- Managers: view all users in their branch
+CREATE POLICY "managers_view_branch_users" ON public.profiles
+  FOR SELECT
+  USING (
+    public.get_my_role() = 'manager'
+    AND branch_id = public.get_my_branch()
+  );
+
+-- Admins: view all non-superadmins
+CREATE POLICY "admins_view_all_non_superadmins" ON public.profiles
+  FOR SELECT
+  USING (
+    public.get_my_role() = 'admin'
+    AND role != 'superadmin'
+  );
+
+-- Superadmins: view all profiles
+CREATE POLICY "superadmins_view_all_users" ON public.profiles
+  FOR SELECT
+  USING (public.get_my_role() = 'superadmin');
+
+-- Users: update their own profile
+CREATE POLICY "users_update_own_profile" ON public.profiles
+  FOR UPDATE
+  USING (clerk_id = auth.uid()::text)
+  WITH CHECK (clerk_id = auth.uid()::text);
+
+-- Admins: manage cashiers and managers
+CREATE POLICY "admins_manage_cashiers_managers" ON public.profiles
+  FOR ALL
+  USING (
+    public.get_my_role() = 'admin'
+    AND role IN ('cashier', 'manager')
+  )
+  WITH CHECK (
+    public.get_my_role() = 'admin'
+    AND role IN ('cashier', 'manager')
+  );
+
+-- Superadmins: full access to all profiles
+CREATE POLICY "superadmins_manage_all_users" ON public.profiles
+  FOR ALL
+  USING (public.get_my_role() = 'superadmin');
+
+-- ── 3. BRANCHES ───────────────────────────────────────────────────────────────
+
+DROP POLICY IF EXISTS "cashiers_managers_view_own_branch" ON public.branches;
+DROP POLICY IF EXISTS "admins_view_all_branches"          ON public.branches;
+DROP POLICY IF EXISTS "superadmins_manage_branches"       ON public.branches;
+
+CREATE POLICY "cashiers_managers_view_own_branch" ON public.branches
+  FOR SELECT
+  USING (
+    id = public.get_my_branch()
+    AND public.get_my_role() IN ('cashier', 'manager')
+  );
+
+CREATE POLICY "admins_view_all_branches" ON public.branches
+  FOR SELECT
+  USING (public.get_my_role() IN ('admin', 'superadmin'));
+
+CREATE POLICY "superadmins_manage_branches" ON public.branches
+  FOR ALL
+  USING (public.get_my_role() = 'superadmin');
+
+-- ── 4. SHIFTS ────────────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "cashiers_view_branch_shifts"      ON public.shifts;
 DROP POLICY IF EXISTS "cashiers_insert_own_shifts"       ON public.shifts;
@@ -115,7 +206,7 @@ CREATE POLICY "admins_manage_all_shifts" ON public.shifts
   FOR ALL
   USING (public.get_my_role() IN ('admin', 'superadmin'));
 
--- ── 3. STOCK_COUNTS ──────────────────────────────────────────────────────────
+-- ── 5. STOCK_COUNTS ──────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "cashiers_manage_own_stock_counts"   ON public.stock_counts;
 DROP POLICY IF EXISTS "cashiers_manage_stock_counts"       ON public.stock_counts;
@@ -159,7 +250,7 @@ CREATE POLICY "admins_manage_all_stock_counts" ON public.stock_counts
   FOR ALL
   USING (public.get_my_role() IN ('admin', 'superadmin'));
 
--- ── 4. ORDERS ────────────────────────────────────────────────────────────────
+-- ── 6. ORDERS ────────────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "cashiers_view_branch_orders"   ON public.orders;
 DROP POLICY IF EXISTS "cashiers_insert_own_orders"    ON public.orders;
@@ -201,7 +292,7 @@ CREATE POLICY "admins_manage_all_orders" ON public.orders
   FOR ALL
   USING (public.get_my_role() IN ('admin', 'superadmin'));
 
--- ── 5. ORDER_ITEMS ───────────────────────────────────────────────────────────
+-- ── 7. ORDER_ITEMS ───────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "view_order_items_via_order"    ON public.order_items;
 DROP POLICY IF EXISTS "cashiers_insert_order_items"   ON public.order_items;
@@ -235,7 +326,7 @@ CREATE POLICY "admins_manage_all_order_items" ON public.order_items
   FOR ALL
   USING (public.get_my_role() IN ('admin', 'superadmin'));
 
--- ── 6. EXPENSES ──────────────────────────────────────────────────────────────
+-- ── 8. EXPENSES ──────────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "cashiers_view_branch_expenses"   ON public.expenses;
 DROP POLICY IF EXISTS "cashiers_insert_own_expenses"    ON public.expenses;
@@ -279,7 +370,7 @@ CREATE POLICY "admins_manage_all_expenses" ON public.expenses
   FOR ALL
   USING (public.get_my_role() IN ('admin', 'superadmin'));
 
--- ── 7. TRANSFERS ─────────────────────────────────────────────────────────────
+-- ── 9. TRANSFERS ─────────────────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "managers_view_own_branch_transfers"   ON public.transfers;
 DROP POLICY IF EXISTS "managers_create_transfers"            ON public.transfers;
@@ -320,7 +411,7 @@ CREATE POLICY "admins_full_access_transfers" ON public.transfers
   TO authenticated
   USING (public.get_my_role() IN ('admin', 'superadmin'));
 
--- ── 8. SHIFT_CHEF_ASSIGNMENTS ────────────────────────────────────────────────
+-- ── 10. SHIFT_CHEF_ASSIGNMENTS ────────────────────────────────────────────────
 
 DROP POLICY IF EXISTS "branch_staff_view_assignments" ON public.shift_chef_assignments;
 DROP POLICY IF EXISTS "cashiers_insert_assignments"   ON public.shift_chef_assignments;
