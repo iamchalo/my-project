@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
-import { DollarSignIcon, TrendingDownIcon, BuildingIcon, Loader2Icon, PencilIcon, LockIcon } from 'lucide-react';
+import { useNotification } from '@/components/ui/notification';
+import { DollarSignIcon, TrendingDownIcon, BuildingIcon, Loader2Icon, PencilIcon, LockIcon, XIcon, SaveIcon } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -37,10 +38,19 @@ interface Branch {
 export default function AdminExpensesPage() {
   const { profile, loading: authLoading } = useAuth();
   const supabase = useClerkSupabaseClient();
+  const { showNotification } = useNotification();
 
   const [loading, setLoading] = useState(true);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+
+  // Edit modal state
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editCategory, setEditCategory] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editQuantity, setEditQuantity] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Filter state
   const [selectedDate, setSelectedDate] = useState<string>(getKenyaDateString());
@@ -196,6 +206,53 @@ export default function AdminExpensesPage() {
     };
   }, [selectedDate, selectedBranch, selectedShift, selectedCategory]);
 
+  const openEditModal = (expense: Expense) => {
+    setEditingExpense(expense);
+    setEditCategory(expense.category);
+    setEditDescription(expense.description);
+    setEditPrice(expense.price.toString());
+    setEditQuantity(expense.quantity.toString());
+  };
+
+  const closeEditModal = () => {
+    setEditingExpense(null);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingExpense) return;
+
+    if (!editCategory) { showNotification('error', 'Please select a category'); return; }
+    if (!editDescription.trim()) { showNotification('error', 'Please enter a description'); return; }
+    const priceVal = parseFloat(editPrice);
+    const qtyVal = parseInt(editQuantity);
+    if (isNaN(priceVal) || priceVal <= 0) { showNotification('error', 'Please enter a valid price'); return; }
+    if (isNaN(qtyVal) || qtyVal <= 0) { showNotification('error', 'Please enter a valid quantity'); return; }
+
+    try {
+      setSaving(true);
+      const totalVal = priceVal * qtyVal;
+      const { error } = await supabase
+        .from('expenses')
+        .update({
+          category: editCategory,
+          description: editDescription.trim(),
+          price: priceVal,
+          quantity: qtyVal,
+          total: totalVal,
+        })
+        .eq('id', editingExpense.id);
+
+      if (error) throw error;
+      showNotification('success', 'Expense updated successfully');
+      closeEditModal();
+      await fetchExpenses();
+    } catch (error: any) {
+      showNotification('error', `Failed to update expense: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const expenseColumns = [
     {
       key: 'index',
@@ -234,6 +291,21 @@ export default function AdminExpensesPage() {
         </Badge>
       ),
     },
+    {
+      key: 'actions',
+      label: 'Actions',
+      render: (_: any, row: Expense) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => openEditModal(row)}
+          className="gap-1"
+        >
+          <PencilIcon className="h-4 w-4" />
+          Edit
+        </Button>
+      ),
+    },
   ];
 
   if (loading && expenses.length === 0) {
@@ -248,6 +320,107 @@ export default function AdminExpensesPage() {
 
   return (
     <DashboardLayout userName={profile?.full_name || 'Superadmin'} userRole="superadmin">
+      {/* Edit Expense Modal */}
+      {editingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold">Edit Expense</h2>
+              <Button variant="ghost" size="sm" onClick={closeEditModal} disabled={saving}>
+                <XIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="p-6 space-y-4">
+              {/* Branch & Cashier (read-only info) */}
+              <div className="grid grid-cols-2 gap-4 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                <div><span className="font-medium text-foreground">Branch:</span> {editingExpense.branch_name}</div>
+                <div><span className="font-medium text-foreground">Cashier:</span> {editingExpense.cashier_name}</div>
+                <div><span className="font-medium text-foreground">Date:</span> {editingExpense.expense_date}</div>
+                <div><span className="font-medium text-foreground">Shift:</span> {editingExpense.shift === 'day' ? 'Day' : 'Night'}</div>
+              </div>
+
+              {/* Category */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Category *</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  disabled={saving}
+                  className="w-full px-4 py-2 border rounded-lg bg-background disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Select Category</option>
+                  <option value="Production">Production</option>
+                  <option value="Staff Foods">Staff Foods</option>
+                  <option value="Home">Home</option>
+                  <option value="Miscellaneous">Miscellaneous</option>
+                </select>
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="text-sm font-medium mb-2 block">Description *</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  disabled={saving}
+                  className="w-full px-4 py-2 border rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+              </div>
+
+              {/* Price & Quantity */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Price (per unit)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    disabled={saving}
+                    className="w-full px-4 py-2 border rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={editQuantity}
+                    onChange={(e) => setEditQuantity(e.target.value)}
+                    disabled={saving}
+                    className="w-full px-4 py-2 border rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              {/* Calculated total preview */}
+              {editPrice && editQuantity && (
+                <div className="flex justify-between items-center bg-muted/50 px-4 py-3 rounded-lg text-sm">
+                  <span className="text-muted-foreground">New Total:</span>
+                  <span className="font-semibold">
+                    Ksh {(parseFloat(editPrice || '0') * parseInt(editQuantity || '0')).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3 p-6 border-t">
+              <Button variant="outline" onClick={closeEditModal} disabled={saving} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEdit} disabled={saving} className="flex-1 gap-2">
+                {saving ? (
+                  <><Loader2Icon className="h-4 w-4 animate-spin" />Saving...</>
+                ) : (
+                  <><SaveIcon className="h-4 w-4" />Save Changes</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-8">
         <div className="max-w-7xl mx-auto space-y-8">
           {/* Header */}

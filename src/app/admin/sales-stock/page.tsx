@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
+import { useNotification } from '@/components/ui/notification';
 import {
   DollarSignIcon,
   TrendingUpIcon,
@@ -80,8 +81,10 @@ interface DailySummary {
 export default function AdminSalesStockPage() {
   const { profile, loading: authLoading } = useAuth();
   const supabase = useClerkSupabaseClient();
+  const { showNotification } = useNotification();
 
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [records, setRecords] = useState<ShiftRecord[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [stockCounts, setStockCounts] = useState<{ [shiftId: string]: StockCount[] }>({});
@@ -99,6 +102,7 @@ export default function AdminSalesStockPage() {
   const fetchRecords = async () => {
     try {
       setLoading(true);
+      setFetchError(null);
 
       let query = supabase
         .from('shifts')
@@ -172,8 +176,11 @@ export default function AdminSalesStockPage() {
         summaryMap.set(record.branch_id, existing);
       });
       setDailySummaries(Array.from(summaryMap.values()));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching records:', error);
+      const msg = error?.message || JSON.stringify(error) || 'Unknown error';
+      setFetchError(msg);
+      showNotification('error', `Failed to load records: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -315,6 +322,15 @@ export default function AdminSalesStockPage() {
 
         <div className="flex-1 p-6 overflow-auto">
           <div className="space-y-6">
+            {/* Error Banner */}
+            {fetchError && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
+                <strong>Error loading data:</strong> {fetchError}
+                <br />
+                <span className="text-xs text-red-600">This usually means a database column is missing. Run the latest migration: <code>20260311_add_missing_shift_columns.sql</code></span>
+              </div>
+            )}
+
             {/* Summary Stats */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatCard title="Total Revenue" value={fmtKsh(totalGrandTotal)} description={`${records.length} shifts completed`} icon={DollarSignIcon} />
