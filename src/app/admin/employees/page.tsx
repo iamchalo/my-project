@@ -479,7 +479,6 @@ export default function AdminEmployeesPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-4xl font-bold">Employee Management</h1>
-              <p className="text-muted-foreground">All staff: POS accounts and non-POS personnel</p>
             </div>
             <Button onClick={() => { resetForm(); setShowAddModal(true); }}>
               <PlusIcon className="h-4 w-4 mr-2" />

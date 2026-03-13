@@ -368,7 +368,6 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
       <div className="h-full flex flex-col">
         <div className="px-8 pt-6 pb-4 border-b">
           <h1 className="text-3xl font-bold">Sales & Stock</h1>
-          <p className="text-muted-foreground">End-of-shift stock counting and cash reconciliation</p>
         </div>
 
         <div className="flex-1 p-6 overflow-auto">

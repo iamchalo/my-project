@@ -188,9 +188,6 @@ export default function ManagerSalesStockPage() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold">Sales & Stock Reports</h1>
-              <p className="text-muted-foreground">
-                View shift reconciliation records submitted by cashiers
-              </p>
             </div>
             <div className="flex items-center gap-2">
               <CalendarIcon className="h-5 w-5 text-muted-foreground" />

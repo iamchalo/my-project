@@ -189,7 +189,6 @@ export default function SuperadminSalesReportPage() {
               <BarChart2Icon className="h-7 w-7 text-primary" />
               <div>
                 <h1 className="text-3xl font-bold">Sales Report</h1>
-                <p className="text-muted-foreground text-sm">Product-level breakdown by shift, branch, or cashier</p>
               </div>
             </div>
             <Button onClick={fetchData} variant="outline" size="sm" disabled={loading}>

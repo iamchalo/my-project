@@ -93,7 +93,6 @@ export default function SuperadminLogsPage() {
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">System Logs</h1>
-            <p className="text-muted-foreground">User authentication activity across all branches</p>
           </div>
 
           {/* Stats */}

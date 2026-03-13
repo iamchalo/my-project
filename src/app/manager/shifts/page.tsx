@@ -267,9 +267,6 @@ export default function ManagerShiftsPage() {
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">Shift History</h1>
-            <p className="text-muted-foreground">
-              View cashier shifts and handover records
-            </p>
           </div>
 
           {/* Stats */}

@@ -111,7 +111,6 @@ export default function AdminChefAssignmentsPage() {
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">Chef Assignments</h1>
-            <p className="text-muted-foreground">Track which chefs are on duty per branch and shift</p>
           </div>
 
           {/* Stats */}

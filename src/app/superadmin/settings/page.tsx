@@ -147,9 +147,6 @@ export default function SuperadminSettingsPage() {
 
           <div>
             <h1 className="text-4xl font-bold">System Settings</h1>
-            <p className="text-muted-foreground">
-              System-wide settings and access control
-            </p>
           </div>
 
           <Card>

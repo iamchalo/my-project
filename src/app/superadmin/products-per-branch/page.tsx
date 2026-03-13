@@ -190,9 +190,6 @@ export default function SuperadminProductsPerBranchPage() {
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">Products per Branch</h1>
-            <p className="text-muted-foreground">
-              Inventory by branch and discrepancies
-            </p>
           </div>
 
           {/* Branch Totals */}

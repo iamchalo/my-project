@@ -247,9 +247,6 @@ export default function AdminOrdersPage() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold">Orders Sold</h1>
-              <p className="text-muted-foreground">
-                View and filter all orders across the system
-              </p>
             </div>
             <Button onClick={fetchOrders} variant="outline" size="sm">
               <RefreshCwIcon className="h-4 w-4 mr-2" />

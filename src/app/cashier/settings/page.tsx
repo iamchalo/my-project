@@ -164,9 +164,6 @@ export default function CashierSettingsPage() {
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">Settings</h1>
-            <p className="text-muted-foreground">
-              Manage your profile and preferences
-            </p>
           </div>
 
           {/* Profile Settings */}

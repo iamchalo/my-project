@@ -237,7 +237,6 @@ export default function AdminTransfersPage() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold">Stock Transfers</h1>
-              <p className="text-muted-foreground mt-1">All inter-branch transfers across every location</p>
             </div>
             <Button variant="outline" size="sm" onClick={fetchTransfers}>
               <RefreshCwIcon className="h-4 w-4 mr-2" />

@@ -375,7 +375,6 @@ export default function AdminInventoryPage() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-4xl font-bold">Branch Inventory</h1>
-              <p className="text-muted-foreground">Track equipment, stock, and assets across all branches</p>
             </div>
             <Button onClick={() => { setFormData({ ...emptyForm }); setShowAdd(true); }} className="gap-2">
               <PlusIcon className="h-4 w-4" />

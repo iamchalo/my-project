@@ -289,9 +289,6 @@ export default function CashierExpensesPage() {
         {/* Header */}
         <div className="px-8 pt-6 pb-4 border-b">
           <h1 className="text-3xl font-bold">Daily Expenses</h1>
-          <p className="text-muted-foreground">
-            Log and track your daily expenses
-          </p>
         </div>
 
         {/* Main Content - Two Column Layout */}

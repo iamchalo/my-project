@@ -310,9 +310,6 @@ export default function CashierOrdersPage() {
         {/* Header */}
         <div className="px-8 pt-6 pb-4 border-b">
           <h1 className="text-3xl font-bold">New Order</h1>
-          <p className="text-muted-foreground">
-            Select products to create a customer order
-          </p>
         </div>
 
         {/* Main Content Grid - Full height */}

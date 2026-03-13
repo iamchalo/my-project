@@ -426,9 +426,6 @@ export default function AdminExpensesPage() {
           {/* Header */}
           <div>
             <h1 className="text-4xl font-bold">Expenses</h1>
-            <p className="text-muted-foreground">
-              View expenses across all branches
-            </p>
           </div>
 
           {/* Stats */}

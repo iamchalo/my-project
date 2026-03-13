@@ -258,9 +258,6 @@ export default function AdminProductsPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold">Products Management</h1>
-              <p className="text-muted-foreground">
-                Manage products and their availability across branches
-              </p>
             </div>
             <Button onClick={() => setShowAddModal(true)} className="gap-2">
               <PlusIcon className="h-4 w-4" />

@@ -239,7 +239,6 @@ export default function ManagerTransfersPage() {
           <div className="flex justify-between items-start">
             <div>
               <h1 className="text-3xl font-bold">Stock Transfers</h1>
-              <p className="text-muted-foreground mt-1">Send and receive stock between branches</p>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={fetchTransfers}>

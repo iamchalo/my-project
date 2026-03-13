@@ -201,7 +201,6 @@ export default function PrintersPage() {
               <Printer className="h-7 w-7" />
               Printers
             </h1>
-            <p className="text-muted-foreground mt-1">Manage printer configs per branch</p>
           </div>
           <Button onClick={openAdd} className="gap-2">
             <Plus className="h-4 w-4" />
