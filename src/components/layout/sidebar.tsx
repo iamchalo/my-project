@@ -17,6 +17,7 @@ import {
   ActivityIcon,
   ShieldIcon,
   PrinterIcon,
+  BarChart2Icon,
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 
@@ -49,6 +50,7 @@ const navigationConfig: Record<UserRole, NavItem[]> = {
   ],
   admin: [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboardIcon },
+    { label: 'Sales Report', href: '/admin/sales-report', icon: BarChart2Icon },
     { label: 'Products', href: '/admin/products', icon: BoxIcon },
     { label: 'Orders Sold', href: '/admin/orders', icon: ShoppingCartIcon },
     { label: 'Expenses', href: '/admin/expenses', icon: DollarSignIcon },
@@ -60,6 +62,7 @@ const navigationConfig: Record<UserRole, NavItem[]> = {
   ],
   superadmin: [
     { label: 'Dashboard', href: '/superadmin', icon: LayoutDashboardIcon },
+    { label: 'Sales Report', href: '/superadmin/sales-report', icon: BarChart2Icon },
     { label: 'Products', href: '/superadmin/products', icon: BoxIcon },
     { label: 'Orders Sold', href: '/superadmin/orders', icon: ShoppingCartIcon },
     { label: 'Expenses', href: '/superadmin/expenses', icon: DollarSignIcon },

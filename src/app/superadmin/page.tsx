@@ -164,6 +164,14 @@ export default function SuperadminDashboard() {
         supabase.from('orders').select('created_at, total_amount').gte('created_at', getDateRange(7).start).order('created_at', { ascending: true }),
       ]);
 
+      // Log any RLS/query errors to help diagnose 0s on the dashboard
+      if (ordersResult.error)    console.error('[dashboard] orders error:', ordersResult.error);
+      if (todayOrdersResult.error) console.error('[dashboard] todayOrders error:', todayOrdersResult.error);
+      if (profilesResult.error)  console.error('[dashboard] profiles error:', profilesResult.error);
+      if (branchesResult.error)  console.error('[dashboard] branches error:', branchesResult.error);
+      if (expensesResult.error)  console.error('[dashboard] expenses error:', expensesResult.error);
+      if (dailySalesResult.error) console.error('[dashboard] dailySales error:', dailySalesResult.error);
+
       const orders = ordersResult.data || [];
       const todayOrders = todayOrdersResult.data || [];
       const profiles = profilesResult.data || [];
