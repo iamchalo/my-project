@@ -24,6 +24,7 @@ import {
   PencilIcon,
   XIcon,
   SaveIcon,
+  RadioIcon,
 } from 'lucide-react';
 
 interface ShiftRecord {
@@ -81,6 +82,15 @@ interface DailySummary {
   shift_count: number;
 }
 
+interface ActiveShiftEntry {
+  id: string;
+  shift_type: 'day' | 'night';
+  branch_name: string;
+  cashier_name: string;
+  chef_names: string;
+  started_at: string;
+}
+
 export default function AdminSalesStockPage() {
   const { profile, loading: authLoading } = useAuth();
   const supabase = useClerkSupabaseClient();
@@ -95,6 +105,7 @@ export default function AdminSalesStockPage() {
   const [selectedDate, setSelectedDate] = useState(getKenyaDateString());
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [dailySummaries, setDailySummaries] = useState<DailySummary[]>([]);
+  const [activeShifts, setActiveShifts] = useState<ActiveShiftEntry[]>([]);
 
   // Edit mode state
   const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
@@ -212,7 +223,64 @@ export default function AdminSalesStockPage() {
     }
   };
 
-  useEffect(() => { if (!authLoading) fetchRecords(); }, [authLoading, selectedDate, selectedBranch]);
+  const fetchActiveShifts = async () => {
+    try {
+      let query = supabase
+        .from('shifts')
+        .select('id, shift_type, branch_id, cashier_id, started_at')
+        .eq('is_active', true)
+        .eq('shift_date', selectedDate)
+        .order('started_at', { ascending: true });
+
+      if (selectedBranch !== 'all') query = query.eq('branch_id', selectedBranch);
+
+      const { data, error } = await query;
+      if (error || !data || data.length === 0) { setActiveShifts([]); return; }
+
+      const branchIds = [...new Set(data.map((s: any) => s.branch_id))];
+      const cashierIds = [...new Set(data.map((s: any) => s.cashier_id))];
+      const [{ data: branchData }, { data: cashierData }] = await Promise.all([
+        supabase.from('branches').select('id, name').in('id', branchIds),
+        supabase.from('profiles').select('id, full_name').in('id', cashierIds),
+      ]);
+      const branchMap = new Map(branchData?.map((b: any) => [b.id, b.name]) || []);
+      const cashierMap = new Map(cashierData?.map((c: any) => [c.id, c.full_name]) || []);
+
+      // Fetch chef assignments for each active shift
+      const shiftIds = data.map((s: any) => s.id);
+      const chefMap = new Map<string, string>();
+      if (shiftIds.length > 0) {
+        const { data: chefAssignments } = await supabase
+          .from('shift_chef_assignments')
+          .select('shift_id, employees!inner(full_name)')
+          .in('shift_id', shiftIds);
+        (chefAssignments || []).forEach((ca: any) => {
+          const existing = chefMap.get(ca.shift_id);
+          const name = ca.employees?.full_name || '';
+          chefMap.set(ca.shift_id, existing ? `${existing}, ${name}` : name);
+        });
+      }
+
+      setActiveShifts(data.map((s: any) => ({
+        id: s.id,
+        shift_type: s.shift_type,
+        branch_name: branchMap.get(s.branch_id) || 'Unknown Branch',
+        cashier_name: cashierMap.get(s.cashier_id) || 'Unknown Cashier',
+        chef_names: chefMap.get(s.id) || 'No chef assigned',
+        started_at: s.started_at,
+      })));
+    } catch (err) {
+      console.error('Error fetching active shifts:', err);
+      setActiveShifts([]);
+    }
+  };
+
+  useEffect(() => {
+    if (!authLoading) {
+      fetchRecords();
+      fetchActiveShifts();
+    }
+  }, [authLoading, selectedDate, selectedBranch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStockCounts = async (shiftId: string) => {
     if (stockCounts[shiftId] !== undefined) return;
@@ -500,6 +568,55 @@ export default function AdminSalesStockPage() {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Active / In-Progress Shifts */}
+            {activeShifts.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <RadioIcon className="h-4 w-4 text-green-500 animate-pulse" />
+                  <h3 className="text-lg font-semibold">Active Shifts — Recording in Progress</h3>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {activeShifts.map(shift => (
+                    <Card key={shift.id} className="border-green-200 dark:border-green-800">
+                      <CardContent className="pt-4 pb-3 px-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex flex-wrap gap-1.5">
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                              {shift.branch_name}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                              shift.shift_type === 'day'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {shift.shift_type === 'day' ? 'Day' : 'Night'}
+                            </span>
+                          </div>
+                          <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                            Live
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold">{shift.cashier_name}</p>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                          <ChefHatIcon className="h-3 w-3" />
+                          <span>{shift.chef_names}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Started{' '}
+                          {new Date(shift.started_at).toLocaleTimeString('en-KE', {
+                            timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit',
+                          })}
+                          {' — '}
+                          <span className="italic">values pending submission</span>
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
             )}
 
             {/* Individual Shift Records */}

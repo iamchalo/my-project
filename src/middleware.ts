@@ -13,7 +13,7 @@ const ROUTE_ROLES: Record<string, UserRole[]> = {
 };
 
 const ROLE_HOME: Record<UserRole, string> = {
-  cashier:    '/cashier/sales-stock',
+  cashier:    '/cashier',
   manager:    '/manager',
   admin:      '/admin',
   superadmin: '/superadmin',
