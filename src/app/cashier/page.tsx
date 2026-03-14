@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/dashboard-layout';
 import { NavigationCard } from '@/components/dashboard/navigation-card';
@@ -36,6 +36,11 @@ export default function CashierDashboard() {
   const [showStartShiftModal, setShowStartShiftModal] = useState(false);
   const [showEndShiftForLogout, setShowEndShiftForLogout] = useState(false);
 
+  // Track if a shift was ever active this browser session — prevents the
+  // StartShiftModal from auto-popping when a shift ends mid-session (e.g.
+  // a day cashier working past 7pm whose shift record gets touched).
+  const hadActiveShiftRef = useRef(false);
+
   // Chef management state
   const [assignedChefs, setAssignedChefs] = useState<AssignedChef[]>([]);
   const [chefsLoading, setChefsLoading] = useState(false);
@@ -60,8 +65,16 @@ export default function CashierDashboard() {
     router.push('/login');
   };
 
+  // Remember if we've ever seen an active shift this session
   useEffect(() => {
-    if (!shiftLoading && !hasActiveShift && profile) {
+    if (hasActiveShift) hadActiveShiftRef.current = true;
+  }, [hasActiveShift]);
+
+  // Only auto-show StartShiftModal on fresh login with no active shift.
+  // If a shift was active at any point this session, don't interrupt the
+  // cashier — they can start a new shift manually if needed.
+  useEffect(() => {
+    if (!shiftLoading && !hasActiveShift && profile && !hadActiveShiftRef.current) {
       setShowStartShiftModal(true);
     }
   }, [shiftLoading, hasActiveShift, profile]);
