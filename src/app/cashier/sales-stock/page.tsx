@@ -71,26 +71,19 @@ export default function CashierSalesPage() {
   );
   const [coinsAmount, setCoinsAmount] = useState('');
 
-  useEffect(() => {
-    const savedData = localStorage.getItem('salesStockForm');
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        if (parsed.mpesaAmount) setMpesaAmount(parsed.mpesaAmount);
-        if (parsed.paybillAmount) setPaybillAmount(parsed.paybillAmount);
-        if (parsed.denominations) setDenominations(parsed.denominations);
-        if (parsed.coinsAmount) setCoinsAmount(parsed.coinsAmount);
-      } catch (e) {
-        console.error('Error loading saved form data:', e);
-      }
-    }
-  }, []);
+  // Keyed by branch + date so data auto-expires each new day
+  const getStorageKey = (branchId: string) =>
+    `salesStock_${branchId}_${getKenyaDateString()}`;
 
+  // Persist all form fields whenever they change (after initial load)
   useEffect(() => {
-    localStorage.setItem('salesStockForm', JSON.stringify({
-      mpesaAmount, paybillAmount, denominations, coinsAmount,
+    if (!profile?.branch_id || !initialLoadDone.current) return;
+    localStorage.setItem(getStorageKey(profile.branch_id), JSON.stringify({
+      stockCounts, mpesaAmount, paybillAmount, denominations, coinsAmount,
     }));
-  }, [mpesaAmount, paybillAmount, denominations, coinsAmount]);
+    // Clean up old key format from previous version
+    localStorage.removeItem('salesStockForm');
+  }, [stockCounts, mpesaAmount, paybillAmount, denominations, coinsAmount, profile?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchExpenseTotal = useCallback(async () => {
     if (!profile?.branch_id || !profile?.id) return;
@@ -134,14 +127,34 @@ export default function CashierSalesPage() {
       }));
       setProducts(formattedProducts);
 
-      setStockCounts(formattedProducts.map((p: Product) => ({
-        product_id: p.id,
-        opening_stock: '',
-        additions: '',
-        transfer: '',
-        spoilt: '',
-        closing_stock: '',
-      })));
+      // Restore saved stock counts from localStorage (keyed by branch + date)
+      const storageKey = profile?.branch_id ? getStorageKey(profile.branch_id) : null;
+      let savedStock: StockCount[] = [];
+      let savedCash: { mpesaAmount?: string; paybillAmount?: string; denominations?: CashDenomination[]; coinsAmount?: string } = {};
+      if (storageKey) {
+        try {
+          const raw = localStorage.getItem(storageKey);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            savedStock = parsed.stockCounts || [];
+            savedCash = parsed;
+          }
+        } catch (e) {
+          console.error('Error restoring saved form data:', e);
+        }
+      }
+
+      // Merge saved values with current product list (handles added/removed products)
+      setStockCounts(formattedProducts.map((p: Product) => {
+        const saved = savedStock.find(sc => sc.product_id === p.id);
+        return saved || { product_id: p.id, opening_stock: '', additions: '', transfer: '', spoilt: '', closing_stock: '' };
+      }));
+
+      // Restore cash fields only on first load
+      if (savedCash.mpesaAmount) setMpesaAmount(savedCash.mpesaAmount);
+      if (savedCash.paybillAmount) setPaybillAmount(savedCash.paybillAmount);
+      if (savedCash.denominations) setDenominations(savedCash.denominations);
+      if (savedCash.coinsAmount) setCoinsAmount(savedCash.coinsAmount);
 
       // Fetch last shift cash (balance brought down) — non-fatal if RPC missing
       const { data: lastCash, error: lastCashError } = await supabase
@@ -323,6 +336,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
     setPaybillAmount('');
     setDenominations(DENOMINATIONS.map(d => ({ denomination: d, quantity: 0, total: 0 })));
     setCoinsAmount('');
+    if (profile?.branch_id) localStorage.removeItem(getStorageKey(profile.branch_id));
     localStorage.removeItem('salesStockForm');
   };
 

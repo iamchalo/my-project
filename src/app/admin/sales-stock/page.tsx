@@ -21,6 +21,9 @@ import {
   SmartphoneIcon,
   ReceiptIcon,
   ChefHatIcon,
+  PencilIcon,
+  XIcon,
+  SaveIcon,
 } from 'lucide-react';
 
 interface ShiftRecord {
@@ -92,6 +95,16 @@ export default function AdminSalesStockPage() {
   const [selectedDate, setSelectedDate] = useState(getKenyaDateString());
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [dailySummaries, setDailySummaries] = useState<DailySummary[]>([]);
+
+  // Edit mode state
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+  const [editShiftForm, setEditShiftForm] = useState<{
+    balance_brought_down: string; mpesa_amount: string; paybill_amount: string;
+    denom_1000_qty: string; denom_500_qty: string; denom_200_qty: string;
+    denom_100_qty: string; denom_50_qty: string; coins_amount: string;
+  } | null>(null);
+  const [editStockCounts, setEditStockCounts] = useState<StockCount[] | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -282,6 +295,98 @@ export default function AdminSalesStockPage() {
     setExpandedRows(newExpanded);
   };
 
+  const startEdit = async (record: ShiftRecord) => {
+    setEditShiftForm({
+      balance_brought_down: String(record.balance_brought_down || 0),
+      mpesa_amount: String(record.mpesa_amount || 0),
+      paybill_amount: String(record.paybill_amount || 0),
+      denom_1000_qty: String(record.denom_1000_qty || 0),
+      denom_500_qty: String(record.denom_500_qty || 0),
+      denom_200_qty: String(record.denom_200_qty || 0),
+      denom_100_qty: String(record.denom_100_qty || 0),
+      denom_50_qty: String(record.denom_50_qty || 0),
+      coins_amount: String(record.coins_amount || 0),
+    });
+    setEditingShiftId(record.id);
+    setExpandedRows(prev => new Set([...prev, record.id]));
+
+    // Fetch stock counts if not yet loaded; use callback form to read fresh state
+    if (stockCounts[record.id] === undefined) {
+      await fetchStockCounts(record.id);
+      // fetchStockCounts calls setStockCounts — read the updated value via a small delay
+      // by using a state update callback that reads the latest stockCounts
+      setStockCounts(prev => {
+        setEditStockCounts((prev[record.id] || []).map(sc => ({ ...sc })));
+        return prev; // no change to stockCounts itself
+      });
+    } else {
+      setEditStockCounts(stockCounts[record.id].map(sc => ({ ...sc })));
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingShiftId(null);
+    setEditShiftForm(null);
+    setEditStockCounts(null);
+  };
+
+  const saveEdit = async (record: ShiftRecord) => {
+    if (!editShiftForm || !editStockCounts) return;
+    try {
+      setSaving(true);
+
+      const d1000 = parseInt(editShiftForm.denom_1000_qty || '0');
+      const d500  = parseInt(editShiftForm.denom_500_qty  || '0');
+      const d200  = parseInt(editShiftForm.denom_200_qty  || '0');
+      const d100  = parseInt(editShiftForm.denom_100_qty  || '0');
+      const d50   = parseInt(editShiftForm.denom_50_qty   || '0');
+      const coins = parseFloat(editShiftForm.coins_amount || '0');
+      const mpesa = parseFloat(editShiftForm.mpesa_amount || '0');
+      const paybill = parseFloat(editShiftForm.paybill_amount || '0');
+      const bbd = parseFloat(editShiftForm.balance_brought_down || '0');
+
+      const cash_in_hand = d1000*1000 + d500*500 + d200*200 + d100*100 + d50*50 + coins;
+      const grand_total = cash_in_hand + mpesa + paybill + Number(record.expense_total || 0) - bbd;
+
+      const { error: shiftError } = await supabase.from('shifts').update({
+        balance_brought_down: bbd,
+        mpesa_amount: mpesa,
+        paybill_amount: paybill,
+        denom_1000_qty: d1000, denom_1000_total: d1000 * 1000,
+        denom_500_qty:  d500,  denom_500_total:  d500  * 500,
+        denom_200_qty:  d200,  denom_200_total:  d200  * 200,
+        denom_100_qty:  d100,  denom_100_total:  d100  * 100,
+        denom_50_qty:   d50,   denom_50_total:   d50   * 50,
+        coins_amount: coins,
+        cash_in_hand,
+        grand_total,
+      }).eq('id', record.id);
+      if (shiftError) throw shiftError;
+
+      // Update each stock count row
+      for (const sc of editStockCounts) {
+        const { error } = await supabase.from('stock_counts').update({
+          opening_stock: Number(sc.opening_stock) || 0,
+          additions:     Number(sc.additions)     || 0,
+          transfer:      Number(sc.transfer)      || 0,
+          spoilt:        Number(sc.spoilt)        || 0,
+          closing_stock: Number(sc.closing_stock) || 0,
+        }).eq('id', sc.id);
+        if (error) throw error;
+      }
+
+      showNotification('success', 'Shift updated successfully');
+      cancelEdit();
+      // Refresh records and clear cached stock counts so they reload
+      setStockCounts(prev => { const n = { ...prev }; delete n[record.id]; return n; });
+      await fetchRecords();
+    } catch (error: any) {
+      showNotification('error', `Failed to save: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const formatTime = (timestamp: string) =>
     new Date(timestamp).toLocaleTimeString('en-KE', {
       timeZone: 'Africa/Nairobi', hour: '2-digit', minute: '2-digit',
@@ -408,7 +513,7 @@ export default function AdminSalesStockPage() {
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold">Individual Shift Records</h3>
                 {records.map(record => (
-                  <Card key={record.id}>
+                  <Card key={record.id} className={editingShiftId === record.id ? 'ring-2 ring-primary' : ''}>
                     <CardHeader className="pb-3">
                       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -427,136 +532,285 @@ export default function AdminSalesStockPage() {
                           <ChefHatIcon className="h-4 w-4 text-muted-foreground" />
                           <span className="text-sm text-muted-foreground">{record.chef_names}</span>
                         </div>
-                        <div className="text-sm text-muted-foreground">
-                          <span className="text-green-600">{formatTime(record.started_at)}</span>
-                          <span className="mx-1">→</span>
-                          <span className="text-red-600">{record.ended_at ? formatTime(record.ended_at) : 'Active'}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-sm text-muted-foreground">
+                            <span className="text-green-600">{formatTime(record.started_at)}</span>
+                            <span className="mx-1">→</span>
+                            <span className="text-red-600">{record.ended_at ? formatTime(record.ended_at) : 'Active'}</span>
+                          </div>
+                          {editingShiftId !== record.id && (
+                            <Button variant="outline" size="sm" onClick={() => startEdit(record)} className="gap-1 h-7 px-2 text-xs">
+                              <PencilIcon className="h-3 w-3" />Edit
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-                        <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Balance B/D</p>
-                          <p className="font-semibold">{fmtKsh(record.balance_brought_down || 0)}</p>
-                        </div>
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                          <p className="text-xs text-muted-foreground">M-Pesa</p>
-                          <p className="font-semibold text-blue-600">{fmtKsh(record.mpesa_amount || 0)}</p>
-                        </div>
-                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Paybill</p>
-                          <p className="font-semibold text-blue-600">{fmtKsh(record.paybill_amount || 0)}</p>
-                        </div>
-                        <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Cash in Hand</p>
-                          <p className="font-semibold text-green-600">{fmtKsh(record.cash_in_hand || 0)}</p>
-                        </div>
-                        <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Expenses</p>
-                          <p className="font-semibold text-red-600">{fmtKsh(record.expense_total || 0)}</p>
-                        </div>
-                        <div className="bg-primary/10 p-3 rounded-lg">
-                          <p className="text-xs text-muted-foreground">Grand Total</p>
-                          <p className="font-bold text-primary">{fmtKsh(record.grand_total || 0)}</p>
-                        </div>
-                      </div>
+                      {(() => {
+                        const isEditing = editingShiftId === record.id && editShiftForm !== null;
 
-                      <Button variant="outline" size="sm" onClick={() => toggleRow(record.id)} className="w-full">
-                        {expandedRows.has(record.id) ? (
-                          <><ChevronUpIcon className="h-4 w-4 mr-2" />Hide Details</>
-                        ) : (
-                          <><ChevronDownIcon className="h-4 w-4 mr-2" />Show Cash Denominations & Stock</>
-                        )}
-                      </Button>
+                        // Live-computed values in edit mode
+                        const editCashInHand = isEditing ? (
+                          parseInt(editShiftForm!.denom_1000_qty || '0') * 1000 +
+                          parseInt(editShiftForm!.denom_500_qty  || '0') * 500  +
+                          parseInt(editShiftForm!.denom_200_qty  || '0') * 200  +
+                          parseInt(editShiftForm!.denom_100_qty  || '0') * 100  +
+                          parseInt(editShiftForm!.denom_50_qty   || '0') * 50   +
+                          parseFloat(editShiftForm!.coins_amount || '0')
+                        ) : 0;
+                        const editGrandTotal = isEditing ? (
+                          editCashInHand +
+                          parseFloat(editShiftForm!.mpesa_amount || '0') +
+                          parseFloat(editShiftForm!.paybill_amount || '0') +
+                          Number(record.expense_total || 0) -
+                          parseFloat(editShiftForm!.balance_brought_down || '0')
+                        ) : 0;
 
-                      {expandedRows.has(record.id) && (
-                        <div className="mt-4 space-y-4">
-                          {/* Cash Denominations */}
-                          <div>
-                            <h4 className="font-medium mb-2">Cash Denominations</h4>
-                            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">
-                              {([
-                                { label: '1000', qty: record.denom_1000_qty, total: record.denom_1000_total },
-                                { label: '500',  qty: record.denom_500_qty,  total: record.denom_500_total  },
-                                { label: '200',  qty: record.denom_200_qty,  total: record.denom_200_total  },
-                                { label: '100',  qty: record.denom_100_qty,  total: record.denom_100_total  },
-                                { label: '50',   qty: record.denom_50_qty,   total: record.denom_50_total   },
-                              ] as const).filter(d => d.qty > 0).map(d => (
-                                <div key={d.label} className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
-                                  <p className="text-xs text-muted-foreground">KSh {d.label}</p>
-                                  <p>{d.qty} × = {fmtKsh(d.total)}</p>
-                                </div>
-                              ))}
-                              {record.coins_amount > 0 && (
-                                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
-                                  <p className="text-xs text-muted-foreground">Coins</p>
-                                  <p>{fmtKsh(record.coins_amount)}</p>
-                                </div>
-                              )}
+                        const editInputCls = 'w-full px-2 py-1 border rounded text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none';
+
+                        return (
+                          <>
+                            {/* Summary stat boxes */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+                              {/* Balance B/D */}
+                              <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Balance B/D</p>
+                                {isEditing ? (
+                                  <input type="number" min="0" step="0.01" className={editInputCls}
+                                    value={editShiftForm!.balance_brought_down}
+                                    onChange={e => setEditShiftForm(f => f && ({ ...f, balance_brought_down: e.target.value }))} />
+                                ) : (
+                                  <p className="font-semibold">{fmtKsh(record.balance_brought_down || 0)}</p>
+                                )}
+                              </div>
+                              {/* M-Pesa */}
+                              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">M-Pesa</p>
+                                {isEditing ? (
+                                  <input type="number" min="0" step="0.01" className={editInputCls}
+                                    value={editShiftForm!.mpesa_amount}
+                                    onChange={e => setEditShiftForm(f => f && ({ ...f, mpesa_amount: e.target.value }))} />
+                                ) : (
+                                  <p className="font-semibold text-blue-600">{fmtKsh(record.mpesa_amount || 0)}</p>
+                                )}
+                              </div>
+                              {/* Paybill */}
+                              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Paybill</p>
+                                {isEditing ? (
+                                  <input type="number" min="0" step="0.01" className={editInputCls}
+                                    value={editShiftForm!.paybill_amount}
+                                    onChange={e => setEditShiftForm(f => f && ({ ...f, paybill_amount: e.target.value }))} />
+                                ) : (
+                                  <p className="font-semibold text-blue-600">{fmtKsh(record.paybill_amount || 0)}</p>
+                                )}
+                              </div>
+                              {/* Cash in Hand — computed */}
+                              <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Cash in Hand</p>
+                                <p className="font-semibold text-green-600">
+                                  {fmtKsh(isEditing ? editCashInHand : (record.cash_in_hand || 0))}
+                                </p>
+                              </div>
+                              {/* Expenses — read-only */}
+                              <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Expenses</p>
+                                <p className="font-semibold text-red-600">{fmtKsh(record.expense_total || 0)}</p>
+                              </div>
+                              {/* Grand Total — computed */}
+                              <div className="bg-primary/10 p-3 rounded-lg">
+                                <p className="text-xs text-muted-foreground mb-1">Grand Total</p>
+                                <p className="font-bold text-primary">
+                                  {fmtKsh(isEditing ? editGrandTotal : (record.grand_total || 0))}
+                                </p>
+                              </div>
                             </div>
-                          </div>
 
-                          {/* Stock Counts */}
-                          <div>
-                            <h4 className="font-medium mb-2">Stock Counts</h4>
-                            {stockCounts[record.id] !== undefined ? (
-                              stockCounts[record.id].length > 0 ? (
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead>
-                                      <tr className="border-b">
-                                        <th className="text-left py-2 px-2">Product</th>
-                                        <th className="text-center py-2 px-2">Opening</th>
-                                        <th className="text-center py-2 px-2">Addition</th>
-                                        <th className="text-center py-2 px-2">Transfer</th>
-                                        <th className="text-center py-2 px-2">Spoilt</th>
-                                        <th className="text-center py-2 px-2 bg-muted/30">Totals</th>
-                                        <th className="text-center py-2 px-2 text-blue-600">Sales</th>
-                                        <th className="text-center py-2 px-2">Closing</th>
-                                        <th className="text-center py-2 px-2 bg-muted/30">Variance</th>
-                                        <th className="text-right py-2 px-2 bg-muted/30">Stock Amount</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {stockCounts[record.id].map(stock => {
-                                        const totals = stock.opening_stock + stock.additions - stock.transfer - stock.spoilt;
-                                        const difference = totals - stock.closing_stock - stock.sales_qty;
-                                        const variance = difference * -1;
-                                        const stockAmount = variance * stock.product_price;
+                            {/* Action buttons */}
+                            {isEditing ? (
+                              <div className="flex gap-2 mb-4">
+                                <Button size="sm" onClick={() => saveEdit(record)} disabled={saving} className="gap-1">
+                                  {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <SaveIcon className="h-3 w-3" />}
+                                  {saving ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={cancelEdit} disabled={saving} className="gap-1">
+                                  <XIcon className="h-3 w-3" />Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button variant="outline" size="sm" onClick={() => toggleRow(record.id)} className="w-full mb-0">
+                                {expandedRows.has(record.id) ? (
+                                  <><ChevronUpIcon className="h-4 w-4 mr-2" />Hide Details</>
+                                ) : (
+                                  <><ChevronDownIcon className="h-4 w-4 mr-2" />Show Cash Denominations & Stock</>
+                                )}
+                              </Button>
+                            )}
+
+                            {/* Expanded / edit details */}
+                            {(expandedRows.has(record.id) || isEditing) && (
+                              <div className="mt-4 space-y-4">
+                                {/* Cash Denominations */}
+                                <div>
+                                  <h4 className="font-medium mb-2">Cash Denominations</h4>
+                                  {isEditing ? (
+                                    <div className="border rounded p-3 space-y-2">
+                                      {([
+                                        { label: '1000', key: 'denom_1000_qty' as const },
+                                        { label: '500',  key: 'denom_500_qty'  as const },
+                                        { label: '200',  key: 'denom_200_qty'  as const },
+                                        { label: '100',  key: 'denom_100_qty'  as const },
+                                        { label: '50',   key: 'denom_50_qty'   as const },
+                                      ]).map(d => {
+                                        const qty = parseInt(editShiftForm![d.key] || '0');
+                                        const denom = parseInt(d.label);
                                         return (
-                                          <tr key={stock.id} className="border-b hover:bg-muted/20">
-                                            <td className="py-2 px-2 font-medium">{stock.product_name}</td>
-                                            <td className="text-center py-2 px-2">{stock.opening_stock}</td>
-                                            <td className="text-center py-2 px-2 text-green-600">+{stock.additions}</td>
-                                            <td className="text-center py-2 px-2 text-orange-600">{stock.transfer}</td>
-                                            <td className="text-center py-2 px-2 text-red-600">{stock.spoilt}</td>
-                                            <td className="text-center py-2 px-2 bg-muted/20 font-medium">{totals}</td>
-                                            <td className="text-center py-2 px-2 text-blue-600">{stock.sales_qty}</td>
-                                            <td className="text-center py-2 px-2">{stock.closing_stock}</td>
-                                            <td className={`text-center py-2 px-2 bg-muted/20 font-medium ${variance < 0 ? 'text-red-600' : variance > 0 ? 'text-green-600' : ''}`}>
-                                              {variance}
-                                            </td>
-                                            <td className={`text-right py-2 px-2 bg-muted/20 font-medium ${stockAmount < 0 ? 'text-red-600' : stockAmount > 0 ? 'text-orange-600' : ''}`}>
-                                              {stockAmount !== 0 ? fmtKsh(Math.abs(stockAmount)) : '—'}
-                                            </td>
-                                          </tr>
+                                          <div key={d.label} className="grid grid-cols-3 gap-2 items-center">
+                                            <span className="text-sm font-medium">KSh {d.label}</span>
+                                            <input type="number" min="0" className="px-2 py-1 border rounded text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                              value={editShiftForm![d.key]}
+                                              onChange={e => setEditShiftForm(f => f && ({ ...f, [d.key]: e.target.value }))}
+                                              placeholder="Qty" />
+                                            <span className="text-sm text-muted-foreground text-right">
+                                              {qty > 0 ? fmtKsh(qty * denom) : ''}
+                                            </span>
+                                          </div>
                                         );
                                       })}
-                                    </tbody>
-                                  </table>
+                                      <div className="grid grid-cols-3 gap-2 items-center">
+                                        <span className="text-sm font-medium">Coins</span>
+                                        <input type="number" min="0" step="0.01" className="px-2 py-1 border rounded text-sm text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                          value={editShiftForm!.coins_amount}
+                                          onChange={e => setEditShiftForm(f => f && ({ ...f, coins_amount: e.target.value }))}
+                                          placeholder="0.00" />
+                                        <span className="text-sm text-muted-foreground text-right">
+                                          {parseFloat(editShiftForm!.coins_amount || '0') > 0 ? fmtKsh(parseFloat(editShiftForm!.coins_amount)) : ''}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">
+                                      {([
+                                        { label: '1000', qty: record.denom_1000_qty, total: record.denom_1000_total },
+                                        { label: '500',  qty: record.denom_500_qty,  total: record.denom_500_total  },
+                                        { label: '200',  qty: record.denom_200_qty,  total: record.denom_200_total  },
+                                        { label: '100',  qty: record.denom_100_qty,  total: record.denom_100_total  },
+                                        { label: '50',   qty: record.denom_50_qty,   total: record.denom_50_total   },
+                                      ] as const).filter(d => d.qty > 0).map(d => (
+                                        <div key={d.label} className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                                          <p className="text-xs text-muted-foreground">KSh {d.label}</p>
+                                          <p>{d.qty} × = {fmtKsh(d.total)}</p>
+                                        </div>
+                                      ))}
+                                      {record.coins_amount > 0 && (
+                                        <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                                          <p className="text-xs text-muted-foreground">Coins</p>
+                                          <p>{fmtKsh(record.coins_amount)}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
                                 </div>
-                              ) : (
-                                <p className="text-sm text-muted-foreground">No stock counts recorded</p>
-                              )
-                            ) : (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin" />Loading...
+
+                                {/* Stock Counts */}
+                                <div>
+                                  <h4 className="font-medium mb-2">Stock Counts</h4>
+                                  {(() => {
+                                    const counts = isEditing ? editStockCounts : stockCounts[record.id];
+                                    if (counts === undefined || counts === null) {
+                                      return (
+                                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                          <Loader2 className="h-4 w-4 animate-spin" />Loading...
+                                        </div>
+                                      );
+                                    }
+                                    if (counts.length === 0) {
+                                      return <p className="text-sm text-muted-foreground">No stock counts recorded</p>;
+                                    }
+                                    return (
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                          <thead>
+                                            <tr className="border-b">
+                                              <th className="text-left py-2 px-2">Product</th>
+                                              <th className="text-center py-2 px-2">Opening</th>
+                                              <th className="text-center py-2 px-2">Addition</th>
+                                              <th className="text-center py-2 px-2">Transfer</th>
+                                              <th className="text-center py-2 px-2">Spoilt</th>
+                                              <th className="text-center py-2 px-2 bg-muted/30">Totals</th>
+                                              <th className="text-center py-2 px-2 text-blue-600">Sales</th>
+                                              <th className="text-center py-2 px-2">Closing</th>
+                                              {!isEditing && <>
+                                                <th className="text-center py-2 px-2 bg-muted/30">Variance</th>
+                                                <th className="text-right py-2 px-2 bg-muted/30">Stock Amount</th>
+                                              </>}
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {counts.map((stock, si) => {
+                                              const totals = Number(stock.opening_stock) + Number(stock.additions) - Number(stock.transfer) - Number(stock.spoilt);
+                                              const variance = isEditing ? null : (totals - Number(stock.closing_stock) - Number(stock.sales_qty)) * -1;
+                                              const stockAmount = isEditing ? null : (variance! * stock.product_price);
+                                              return (
+                                                <tr key={stock.id} className="border-b hover:bg-muted/20">
+                                                  <td className="py-2 px-2 font-medium">{stock.product_name}</td>
+                                                  {isEditing ? (
+                                                    <>
+                                                      {(['opening_stock', 'additions', 'transfer', 'spoilt'] as const).map(field => (
+                                                        <td key={field} className="py-1 px-1 text-center">
+                                                          <input type="number" min="0"
+                                                            className="w-14 px-1 py-1 border rounded text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                            value={String(stock[field])}
+                                                            onChange={e => {
+                                                              const val = e.target.value;
+                                                              setEditStockCounts(prev => prev ? prev.map((s, i) => i === si ? { ...s, [field]: val } : s) : prev);
+                                                            }} />
+                                                        </td>
+                                                      ))}
+                                                      <td className="text-center py-2 px-2 bg-muted/20 font-medium">{totals}</td>
+                                                      <td className="text-center py-2 px-2 text-blue-600">{stock.sales_qty}</td>
+                                                      <td className="py-1 px-1 text-center">
+                                                        <input type="number" min="0"
+                                                          className="w-14 px-1 py-1 border rounded text-xs text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                          value={String(stock.closing_stock)}
+                                                          onChange={e => {
+                                                            const val = e.target.value;
+                                                            setEditStockCounts(prev => prev ? prev.map((s, i) => i === si ? { ...s, closing_stock: val as any } : s) : prev);
+                                                          }} />
+                                                      </td>
+                                                    </>
+                                                  ) : (
+                                                    <>
+                                                      <td className="text-center py-2 px-2">{stock.opening_stock}</td>
+                                                      <td className="text-center py-2 px-2 text-green-600">+{stock.additions}</td>
+                                                      <td className="text-center py-2 px-2 text-orange-600">{stock.transfer}</td>
+                                                      <td className="text-center py-2 px-2 text-red-600">{stock.spoilt}</td>
+                                                      <td className="text-center py-2 px-2 bg-muted/20 font-medium">{totals}</td>
+                                                      <td className="text-center py-2 px-2 text-blue-600">{stock.sales_qty}</td>
+                                                      <td className="text-center py-2 px-2">{stock.closing_stock}</td>
+                                                      <td className={`text-center py-2 px-2 bg-muted/20 font-medium ${variance! < 0 ? 'text-red-600' : variance! > 0 ? 'text-green-600' : ''}`}>
+                                                        {variance}
+                                                      </td>
+                                                      <td className={`text-right py-2 px-2 bg-muted/20 font-medium ${stockAmount! < 0 ? 'text-red-600' : stockAmount! > 0 ? 'text-orange-600' : ''}`}>
+                                                        {stockAmount !== 0 ? fmtKsh(Math.abs(stockAmount!)) : '—'}
+                                                      </td>
+                                                    </>
+                                                  )}
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
                               </div>
                             )}
-                          </div>
-                        </div>
-                      )}
+                          </>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 ))}
