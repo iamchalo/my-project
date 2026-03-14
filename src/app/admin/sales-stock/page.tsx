@@ -575,7 +575,7 @@ export default function AdminSalesStockPage() {
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <RadioIcon className="h-4 w-4 text-green-500 animate-pulse" />
-                  <h3 className="text-lg font-semibold">Active Shifts — Recording in Progress</h3>
+                  <h3 className="text-lg font-semibold">Active Shifts</h3>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                   {activeShifts.map(shift => (
