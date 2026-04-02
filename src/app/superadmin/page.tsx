@@ -322,7 +322,7 @@ export default function SuperadminDashboard() {
             <div className="flex items-center gap-2">
               <CrownIcon className="h-8 w-8 text-amber-500" />
               <div>
-                <h1 className="text-3xl font-bold">Hello, {profile?.full_name}</h1>
+                <h1 className="text-3xl font-bold">Hello,{profile?.full_name}</h1>
               </div>
             </div>
             <Button onClick={handleRefresh} variant="outline" size="sm">
