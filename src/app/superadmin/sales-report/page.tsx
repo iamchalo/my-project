@@ -197,7 +197,7 @@ export default function SuperadminSalesReportPage() {
     if (authLoading) return;
     const hasDate = viewMode === 'day' ? !!date : viewMode === 'range' ? !!dateFrom && !!dateTo : !!monthFilter;
     if (hasDate) fetchData();
-  }, [authLoading, viewMode, date, dateFrom, dateTo, monthFilter, shiftFilter, branchFilter, cashierFilter]);
+  }, [authLoading, viewMode, date, dateFrom, dateTo, monthFilter, shiftFilter, branchFilter, cashierFilter, fetchData]);
 
   const handleClear = () => {
     const today = getKenyaDate();
@@ -243,7 +243,7 @@ export default function SuperadminSalesReportPage() {
                 {(['day', 'range', 'month'] as const).map((mode) => (
                   <button
                     key={mode}
-                    onClick={() => setViewMode(mode)}
+                    onClick={() => { setViewMode(mode); if (mode !== 'day') setShiftFilter('all'); }}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       viewMode === mode
                         ? 'bg-background shadow-sm text-foreground'
