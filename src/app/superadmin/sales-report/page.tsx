@@ -52,7 +52,11 @@ export default function SuperadminSalesReportPage() {
   const { profile, loading: authLoading } = useAuth();
   const supabase = useClerkSupabaseClient();
 
+  const [viewMode, setViewMode] = useState<'day' | 'range' | 'month'>('day');
   const [date, setDate] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
   const [shiftFilter, setShiftFilter] = useState<'all' | 'day' | 'night'>('all');
   const [branchFilter, setBranchFilter] = useState<string>('');
   const [cashierFilter, setCashierFilter] = useState<string>('');
@@ -64,7 +68,11 @@ export default function SuperadminSalesReportPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    setDate(getKenyaDate());
+    const today = getKenyaDate();
+    setDate(today);
+    setDateFrom(today);
+    setDateTo(today);
+    setMonthFilter(today.slice(0, 7));
   }, []);
 
   useEffect(() => {
@@ -98,14 +106,32 @@ export default function SuperadminSalesReportPage() {
   }, [authLoading, branchFilter]);
 
   const fetchData = useCallback(async () => {
-    if (!date) return;
+    let startDate: string;
+    let endDate: string;
+
+    if (viewMode === 'day') {
+      if (!date) return;
+      startDate = `${date}T00:00:00+03:00`;
+      endDate = `${date}T23:59:59+03:00`;
+    } else if (viewMode === 'range') {
+      if (!dateFrom || !dateTo) return;
+      startDate = `${dateFrom}T00:00:00+03:00`;
+      endDate = `${dateTo}T23:59:59+03:00`;
+    } else {
+      if (!monthFilter) return;
+      const [year, month] = monthFilter.split('-').map(Number);
+      const lastDay = new Date(year, month, 0).getDate();
+      startDate = `${monthFilter}-01T00:00:00+03:00`;
+      endDate = `${monthFilter}-${lastDay.toString().padStart(2, '0')}T23:59:59+03:00`;
+    }
+
     setLoading(true);
     try {
       let ordersQuery = supabase
         .from('orders')
         .select('id, cashier_id, branch_id, created_at')
-        .gte('created_at', `${date}T00:00:00+03:00`)
-        .lte('created_at', `${date}T23:59:59+03:00`);
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
 
       if (branchFilter) ordersQuery = ordersQuery.eq('branch_id', branchFilter);
       if (cashierFilter) ordersQuery = ordersQuery.eq('cashier_id', cashierFilter);
@@ -165,14 +191,20 @@ export default function SuperadminSalesReportPage() {
     } finally {
       setLoading(false);
     }
-  }, [date, shiftFilter, branchFilter, cashierFilter, supabase]);
+  }, [viewMode, date, dateFrom, dateTo, monthFilter, shiftFilter, branchFilter, cashierFilter, supabase]);
 
   useEffect(() => {
-    if (!authLoading && date) fetchData();
-  }, [authLoading, date, shiftFilter, branchFilter, cashierFilter]);
+    if (authLoading) return;
+    const hasDate = viewMode === 'day' ? !!date : viewMode === 'range' ? !!dateFrom && !!dateTo : !!monthFilter;
+    if (hasDate) fetchData();
+  }, [authLoading, viewMode, date, dateFrom, dateTo, monthFilter, shiftFilter, branchFilter, cashierFilter]);
 
   const handleClear = () => {
-    setDate(getKenyaDate());
+    const today = getKenyaDate();
+    setDate(today);
+    setDateFrom(today);
+    setDateTo(today);
+    setMonthFilter(today.slice(0, 7));
     setShiftFilter('all');
     setBranchFilter('');
     setCashierFilter('');
@@ -205,30 +237,89 @@ export default function SuperadminSalesReportPage() {
                 <CardTitle className="text-base">Filters</CardTitle>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-4 items-end">
-                <div className="flex-1 min-w-[140px]">
-                  <label className="text-xs text-muted-foreground mb-1 block">Date</label>
-                  <input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
-                  />
-                </div>
-
-                <div className="flex-1 min-w-[130px]">
-                  <label className="text-xs text-muted-foreground mb-1 block">Shift</label>
-                  <select
-                    value={shiftFilter}
-                    onChange={(e) => setShiftFilter(e.target.value as 'all' | 'day' | 'night')}
-                    className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+            <CardContent className="space-y-4">
+              {/* View mode toggle */}
+              <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                {(['day', 'range', 'month'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      viewMode === mode
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
                   >
-                    <option value="all">All Shifts</option>
-                    <option value="day">Day (07:00–18:59)</option>
-                    <option value="night">Night (19:00–06:59)</option>
-                  </select>
-                </div>
+                    {mode === 'day' ? 'Single Day' : mode === 'range' ? 'Date Range' : 'Month'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-4 items-end">
+                {/* Date input(s) */}
+                {viewMode === 'day' && (
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="text-xs text-muted-foreground mb-1 block">Date</label>
+                    <input
+                      type="date"
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                    />
+                  </div>
+                )}
+
+                {viewMode === 'range' && (
+                  <>
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="text-xs text-muted-foreground mb-1 block">From</label>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        max={dateTo || undefined}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[140px]">
+                      <label className="text-xs text-muted-foreground mb-1 block">To</label>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        min={dateFrom || undefined}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {viewMode === 'month' && (
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="text-xs text-muted-foreground mb-1 block">Month</label>
+                    <input
+                      type="month"
+                      value={monthFilter}
+                      onChange={(e) => setMonthFilter(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                    />
+                  </div>
+                )}
+
+                {viewMode === 'day' && (
+                  <div className="flex-1 min-w-[130px]">
+                    <label className="text-xs text-muted-foreground mb-1 block">Shift</label>
+                    <select
+                      value={shiftFilter}
+                      onChange={(e) => setShiftFilter(e.target.value as 'all' | 'day' | 'night')}
+                      className="w-full px-3 py-2 border rounded-lg text-sm bg-background"
+                    >
+                      <option value="all">All Shifts</option>
+                      <option value="day">Day (07:00–18:59)</option>
+                      <option value="night">Night (19:00–06:59)</option>
+                    </select>
+                  </div>
+                )}
 
                 <div className="flex-1 min-w-[150px]">
                   <label className="text-xs text-muted-foreground mb-1 block">Branch</label>
