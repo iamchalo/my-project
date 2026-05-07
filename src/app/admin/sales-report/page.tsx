@@ -132,71 +132,67 @@ export default function AdminSalesReportPage() {
 
     setLoading(true);
     try {
-      // 1. Query orders for the selected range
-      let ordersQuery = supabase
-        .from('orders')
-        .select('id, cashier_id, branch_id, created_at')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
+      // Paginate through orders 1000 at a time so Supabase row-caps never
+      // truncate the result. Each page embeds its order_items, so no .in() needed.
+      const PAGE = 1000;
+      let offset = 0;
+      const agg: Record<string, { unit_price: number; qty: number; total: number }> = {};
 
-      if (branchFilter) ordersQuery = ordersQuery.eq('branch_id', branchFilter);
-      if (cashierFilter) ordersQuery = ordersQuery.eq('cashier_id', cashierFilter);
+      while (true) {
+        let q = supabase
+          .from('orders')
+          .select('created_at, order_items(product_name, product_price, quantity)')
+          .gte('created_at', startDate)
+          .lte('created_at', endDate)
+          .order('created_at', { ascending: true })
+          .range(offset, offset + PAGE - 1);
 
-      const { data: ordersData, error: ordersError } = await ordersQuery;
-      if (ordersError) {
-        console.error('Error fetching orders:', ordersError);
-        setRows([]);
-        setGrandTotal(0);
-        return;
-      }
+        if (branchFilter) q = q.eq('branch_id', branchFilter);
+        if (cashierFilter) q = q.eq('cashier_id', cashierFilter);
 
-      // 2. Apply shift filter client-side
-      const filteredOrders = (ordersData || []).filter((o) =>
-        isInShift(o.created_at, shiftFilter)
-      );
+        const { data, error } = await q;
 
-      if (filteredOrders.length === 0) {
-        setRows([]);
-        setGrandTotal(0);
-        return;
-      }
-
-      const orderIds = filteredOrders.map((o) => o.id);
-
-      // 3. Fetch order_items for matched orders
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('order_items')
-        .select('order_id, product_name, product_price, quantity')
-        .in('order_id', orderIds);
-
-      if (itemsError) {
-        console.error('Error fetching order items:', itemsError);
-        setRows([]);
-        setGrandTotal(0);
-        return;
-      }
-
-      // 4. Aggregate by product_name
-      const agg: Record<string, { unit_price: number; qty: number }> = {};
-      for (const item of itemsData || []) {
-        if (!agg[item.product_name]) {
-          agg[item.product_name] = { unit_price: item.product_price, qty: 0 };
+        if (error) {
+          console.error('Error fetching orders:', error);
+          setRows([]);
+          setGrandTotal(0);
+          return;
         }
-        agg[item.product_name].qty += item.quantity;
+
+        for (const order of data || []) {
+          if (!isInShift(order.created_at, shiftFilter)) continue;
+          for (const item of (order.order_items as { product_name: string; product_price: number; quantity: number }[] | null) || []) {
+            const price = Number(item.product_price);
+            const qty = item.quantity;
+            if (!agg[item.product_name]) {
+              agg[item.product_name] = { unit_price: price, qty: 0, total: 0 };
+            }
+            agg[item.product_name].qty += qty;
+            agg[item.product_name].total += price * qty;
+          }
+        }
+
+        if (!data || data.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      if (Object.keys(agg).length === 0) {
+        setRows([]);
+        setGrandTotal(0);
+        return;
       }
 
       const aggregated: SalesRow[] = Object.entries(agg)
-        .map(([product_name, { unit_price, qty }]) => ({
+        .map(([product_name, { unit_price, qty, total }]) => ({
           product_name,
           unit_price,
           qty,
-          total: unit_price * qty,
+          total,
         }))
         .sort((a, b) => b.total - a.total);
 
-      const gt = aggregated.reduce((s, r) => s + r.total, 0);
       setRows(aggregated);
-      setGrandTotal(gt);
+      setGrandTotal(aggregated.reduce((s, r) => s + r.total, 0));
     } finally {
       setLoading(false);
     }
