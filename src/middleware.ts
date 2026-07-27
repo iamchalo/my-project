@@ -19,7 +19,7 @@ const ROLE_HOME: Record<UserRole, string> = {
   superadmin: '/superadmin',
 };
 
-const PUBLIC_PATHS = ['/login', '/reset-password', '/auth/reset-password'];
+const PUBLIC_PATHS = ['/login', '/auth/reset-password'];
 
 function getProtectedPrefix(pathname: string): string | null {
   for (const prefix of Object.keys(ROUTE_ROLES)) {
@@ -49,6 +49,30 @@ async function getRoleFromDb(clerkUserId: string): Promise<{ role: UserRole; is_
   return { role: data.role as UserRole, is_active: data.is_active ?? true };
 }
 
+// Cashiers with any cashier_branches rows (beyond their home branch) must
+// pick an active branch at login before landing on /cashier.
+async function cashierNeedsBranchSelection(clerkUserId: string): Promise<boolean> {
+  const supabase = createAdminClient();
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('clerk_id', clerkUserId)
+    .maybeSingle();
+  if (!profile?.id) return false;
+  const { count } = await supabase
+    .from('cashier_branches')
+    .select('branch_id', { count: 'exact', head: true })
+    .eq('profile_id', profile.id);
+  return (count ?? 0) > 0;
+}
+
+async function resolveHomeForRole(role: UserRole, clerkUserId: string): Promise<string> {
+  if (role === 'cashier' && (await cashierNeedsBranchSelection(clerkUserId))) {
+    return '/select-branch';
+  }
+  return ROLE_HOME[role];
+}
+
 export default clerkMiddleware(async (auth, request: NextRequest) => {
   const { userId } = await auth();
   const { pathname } = request.nextUrl;
@@ -60,11 +84,9 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
   }
 
   const isPublic = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(`${p}/`));
-  const isResetPath = pathname.startsWith('/reset-password') || pathname.startsWith('/auth/reset-password');
 
   // ── Public routes ──────────────────────────────────────────────────────
   if (isPublic) {
-    if (isResetPath) return response;
     if (userId) {
       const cachedRole = request.cookies.get('pos-role')?.value as UserRole | undefined;
       if (cachedRole && ROLE_HOME[cachedRole]) {
@@ -85,14 +107,22 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
     if (!userId) return NextResponse.redirect(new URL('/login', request.url));
     const cachedRole = request.cookies.get('pos-role')?.value as UserRole | undefined;
     if (cachedRole && ROLE_HOME[cachedRole]) {
-      return NextResponse.redirect(new URL(ROLE_HOME[cachedRole], request.url));
+      const dest = await resolveHomeForRole(cachedRole, userId);
+      return NextResponse.redirect(new URL(dest, request.url));
     }
     const profile = await getRoleFromDb(userId);
     if (!profile?.role) return NextResponse.redirect(new URL('/login', request.url));
     if (!profile.is_active) return NextResponse.redirect(new URL('/login', request.url));
-    const res = NextResponse.redirect(new URL(ROLE_HOME[profile.role], request.url));
+    const dest = await resolveHomeForRole(profile.role, userId);
+    const res = NextResponse.redirect(new URL(dest, request.url));
     setRoleCookie(res, profile.role);
     return res;
+  }
+
+  // ── Branch picker (cashier, post-login) ──────────────────────────────────
+  if (pathname === '/select-branch') {
+    if (!userId) return NextResponse.redirect(new URL('/login', request.url));
+    return response;
   }
 
   // ── Role-protected routes ──────────────────────────────────────────────
