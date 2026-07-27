@@ -28,6 +28,7 @@ export default function CashierOrdersPage() {
   const { profile } = useAuth();
   const supabase = useClerkSupabaseClient();
   const { notification, showNotification, hideNotification } = useNotification();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<OrderItem[]>([]);
@@ -37,7 +38,7 @@ export default function CashierOrdersPage() {
 
   // Fetch products from the database (using new centralized schema)
   useEffect(() => {
-    if (!profile?.branch_id) {
+    if (!activeBranchId) {
       setLoading(false);
       return;
     }
@@ -46,7 +47,7 @@ export default function CashierOrdersPage() {
       try {
         setLoading(true);
         const { data, error } = await supabase.rpc('get_branch_products', {
-          target_branch_id: profile.branch_id,
+          target_branch_id: activeBranchId,
         });
 
         if (error) throw error;
@@ -59,7 +60,7 @@ export default function CashierOrdersPage() {
           product_price: parseFloat(item.product_price),
           image_url: item.image_url,
           is_active: item.is_active,
-          branch_id: profile.branch_id,
+          branch_id: activeBranchId,
         }));
 
         setProducts(transformedProducts);
@@ -75,7 +76,7 @@ export default function CashierOrdersPage() {
       const { data } = await supabase
         .from('branches')
         .select('name')
-        .eq('id', profile.branch_id)
+        .eq('id', activeBranchId)
         .single();
       if (data?.name) setBranchName(data.name);
     };
@@ -83,7 +84,7 @@ export default function CashierOrdersPage() {
     fetchProducts();
     fetchBranchName();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile?.branch_id]);
+  }, [activeBranchId]);
 
   // Add product to cart
   const handleAddToOrder = (product: Product) => {
@@ -152,7 +153,7 @@ export default function CashierOrdersPage() {
       const { data: config } = await supabase
         .from('printer_configs')
         .select('printer_name')
-        .eq('branch_id', profile!.branch_id)
+        .eq('branch_id', activeBranchId!)
         .eq('is_active', true)
         .maybeSingle();
 
@@ -167,11 +168,11 @@ export default function CashierOrdersPage() {
       // Fetch branch name + phone fresh at print time to avoid stale closure
       let resolvedBranchName = branchName;
       let resolvedBranchPhone: string | undefined;
-      if (profile?.branch_id) {
+      if (activeBranchId) {
         const { data: branchData } = await supabase
           .from('branches')
           .select('name, phone')
-          .eq('id', profile.branch_id)
+          .eq('id', activeBranchId)
           .single();
         resolvedBranchName = branchData?.name || resolvedBranchName;
         resolvedBranchPhone = branchData?.phone || undefined;
@@ -202,7 +203,7 @@ export default function CashierOrdersPage() {
 
   // Save order to database
   const saveOrder = async (paymentMethod: 'cash' | 'mpesa') => {
-    if (!profile?.id || !profile?.branch_id) {
+    if (!profile?.id || !activeBranchId) {
       showNotification('error', 'User profile not loaded');
       return;
     }
@@ -223,7 +224,7 @@ export default function CashierOrdersPage() {
         .from('orders')
         .insert({
           order_number: orderNumber,
-          branch_id: profile.branch_id,
+          branch_id: activeBranchId,
           cashier_id: profile.id,
           payment_method: paymentMethod,
           total_amount: total,
@@ -267,7 +268,7 @@ export default function CashierOrdersPage() {
 
   if (loading) {
     return (
-      <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier">
+      <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" branchName={profile?.active_branch?.name}>
         <div className="h-full flex">
           {/* Products Grid Skeleton */}
           <div className="flex-1 p-6">
@@ -305,7 +306,7 @@ export default function CashierOrdersPage() {
   }
 
   return (
-    <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier">
+    <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" branchName={profile?.active_branch?.name}>
       <div className="h-full flex flex-col">
         {/* Header */}
         <div className="px-8 pt-6 pb-4 border-b">

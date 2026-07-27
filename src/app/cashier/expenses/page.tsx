@@ -32,6 +32,7 @@ export default function CashierExpensesPage() {
   const supabase = useClerkSupabaseClient();
   const { showNotification } = useNotification();
   const { hasActiveShift, loading: shiftLoading, activeShift } = useShift();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +63,7 @@ export default function CashierExpensesPage() {
     fetchExpenses(true);
 
     // Set up real-time subscription for expense changes
-    if (profile?.branch_id) {
+    if (activeBranchId) {
       const currentDate = new Date().toISOString().split('T')[0];
 
       const subscription = supabase
@@ -73,7 +74,7 @@ export default function CashierExpensesPage() {
             event: '*',
             schema: 'public',
             table: 'expenses',
-            filter: `branch_id=eq.${profile.branch_id}`,
+            filter: `branch_id=eq.${activeBranchId}`,
           },
           () => {
             // Refetch expenses when any change occurs
@@ -86,10 +87,10 @@ export default function CashierExpensesPage() {
         subscription.unsubscribe();
       };
     }
-  }, [profile?.branch_id, profile?.id]);
+  }, [activeBranchId, profile?.id]);
 
   const fetchExpenses = async (showLoading: boolean = false) => {
-    if (!profile?.branch_id || !profile?.id) {
+    if (!activeBranchId || !profile?.id) {
       if (showLoading) setLoading(false);
       return;
     }
@@ -107,7 +108,7 @@ export default function CashierExpensesPage() {
       const { data, error } = await supabase
         .from('expenses')
         .select('id, expense_number, category, description, price, quantity, total, expense_date, created_at')
-        .eq('branch_id', profile.branch_id)
+        .eq('branch_id', activeBranchId)
         .eq('cashier_id', profile.id)
         .eq('expense_date', currentDate)
         .eq('shift', currentShift)
@@ -152,7 +153,7 @@ export default function CashierExpensesPage() {
       return;
     }
 
-    if (!profile?.id || !profile?.branch_id) {
+    if (!profile?.id || !activeBranchId) {
       showNotification('error', 'User profile not loaded');
       return;
     }
@@ -176,7 +177,7 @@ export default function CashierExpensesPage() {
       const { error: expenseError } = await supabase
         .from('expenses')
         .insert({
-          branch_id: profile.branch_id,
+          branch_id: activeBranchId,
           cashier_id: profile.id,
           category: category,
           description: description.trim(),
@@ -221,6 +222,7 @@ export default function CashierExpensesPage() {
       <DashboardLayout
         userName={profile?.full_name || 'Cashier'}
         userRole="cashier"
+        branchName={profile?.active_branch?.name}
         hasActiveShift={hasActiveShift}
         onEndShiftAndLogout={handleEndShiftAndLogout}
       >
@@ -275,6 +277,7 @@ export default function CashierExpensesPage() {
     <DashboardLayout
       userName={profile?.full_name || 'Cashier'}
       userRole="cashier"
+      branchName={profile?.active_branch?.name}
       hasActiveShift={hasActiveShift}
       onEndShiftAndLogout={handleEndShiftAndLogout}
     >

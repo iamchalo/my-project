@@ -13,6 +13,8 @@ export interface Profile {
   full_name: string;
   role: 'cashier' | 'manager' | 'admin' | 'superadmin';
   branch_id: string | null;
+  active_branch_id: string | null;
+  active_branch: { name: string } | null;
   avatar_url: string | null;
   phone: string | null;
   is_active: boolean;
@@ -65,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = useCallback(async (clerkId: string): Promise<Profile | null> => {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, clerk_id, email, full_name, role, branch_id, avatar_url, phone, is_active, active_session_id, created_at, updated_at')
+      .select('id, clerk_id, email, full_name, role, branch_id, active_branch_id, active_branch:branches!active_branch_id(name), avatar_url, phone, is_active, active_session_id, created_at, updated_at')
       .eq('clerk_id', clerkId)
       .single();
 
@@ -74,8 +76,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       return null;
     }
-    setProfile(data);
-    return data;
+    const typedProfile = data as unknown as Profile;
+    setProfile(typedProfile);
+    return typedProfile;
   }, [supabase]);
 
   // ── Force sign-out with reason ────────────────────────────────────────────

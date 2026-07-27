@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MenuIcon, LogOut, ClockIcon } from 'lucide-react';
+import { MenuIcon, LogOut, ClockIcon, StoreIcon } from 'lucide-react';
 import { UserRole } from '@/lib/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/lib/auth/auth-context';
@@ -16,6 +16,7 @@ interface TopBarProps {
   onClockClick?: () => void;
   hasActiveShift?: boolean;
   onEndShiftAndLogout?: () => void;
+  branchName?: string;
 }
 
 export function TopBar({
@@ -27,6 +28,7 @@ export function TopBar({
   onClockClick,
   hasActiveShift = false,
   onEndShiftAndLogout,
+  branchName,
 }: TopBarProps) {
   const router = useRouter();
   const { signOut } = useAuth();
@@ -128,19 +130,27 @@ export function TopBar({
         </button>
 
         {/* Center: Time and Date (Cashier only) */}
-        {showClock && onClockClick && (
-          <button
-            onClick={onClockClick}
-            className="flex flex-col items-center px-4 py-2 hover:bg-accent rounded-lg transition-colors"
-          >
-            <div className="text-2xl font-bold tabular-nums" suppressHydrationWarning>
-              {mounted ? formatTime(currentTime) : '--:--:--'}
+        <div className="flex items-center gap-3">
+          {branchName && (
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+              <StoreIcon className="h-3.5 w-3.5" />
+              Working at: {branchName}
             </div>
-            <div className="text-xs text-muted-foreground" suppressHydrationWarning>
-              {mounted ? formatDate(currentTime) : 'Loading...'}
-            </div>
-          </button>
-        )}
+          )}
+          {showClock && onClockClick && (
+            <button
+              onClick={onClockClick}
+              className="flex flex-col items-center px-4 py-2 hover:bg-accent rounded-lg transition-colors"
+            >
+              <div className="text-2xl font-bold tabular-nums" suppressHydrationWarning>
+                {mounted ? formatTime(currentTime) : '--:--:--'}
+              </div>
+              <div className="text-xs text-muted-foreground" suppressHydrationWarning>
+                {mounted ? formatDate(currentTime) : 'Loading...'}
+              </div>
+            </button>
+          )}
+        </div>
 
         {/* Right: User Info with Dropdown */}
         <div className="relative user-dropdown">

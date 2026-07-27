@@ -12,6 +12,7 @@ interface DashboardLayoutProps {
   userRole: UserRole;
   hasActiveShift?: boolean;
   onEndShiftAndLogout?: () => void;
+  branchName?: string;
 }
 
 export function DashboardLayout({
@@ -20,6 +21,7 @@ export function DashboardLayout({
   userRole,
   hasActiveShift,
   onEndShiftAndLogout,
+  branchName,
 }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
@@ -78,6 +80,7 @@ export function DashboardLayout({
         onClockClick={isCashier ? toggleClock : undefined}
         hasActiveShift={hasActiveShift}
         onEndShiftAndLogout={onEndShiftAndLogout}
+        branchName={isCashier ? branchName : undefined}
       />
 
       {/* Sidebar */}

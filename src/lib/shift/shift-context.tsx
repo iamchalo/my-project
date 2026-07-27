@@ -28,13 +28,14 @@ const ShiftContext = createContext<ShiftContextType | undefined>(undefined);
 export function ShiftProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const supabase = useClerkSupabaseClient();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch active shift for the branch
   const fetchActiveShift = async () => {
-    if (!profile?.branch_id) {
+    if (!activeBranchId) {
       setLoading(false);
       return;
     }
@@ -42,7 +43,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .rpc('get_active_shift', {
-          p_branch_id: profile.branch_id
+          p_branch_id: activeBranchId
         });
 
       if (error) throw error;
@@ -62,7 +63,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
 
   // Initial fetch and real-time subscription
   useEffect(() => {
-    if (!profile?.branch_id) {
+    if (!activeBranchId) {
       setLoading(false);
       return;
     }
@@ -84,7 +85,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
             event: '*',
             schema: 'public',
             table: 'shifts',
-            filter: `branch_id=eq.${profile.branch_id}`,
+            filter: `branch_id=eq.${activeBranchId}`,
           },
           () => {
             fetchActiveShift();
@@ -100,7 +101,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
         subscription.unsubscribe();
       }
     };
-  }, [profile?.branch_id]);
+  }, [activeBranchId]);
 
   // Get current shift type based on Kenya time
   const getCurrentShiftType = (): 'day' | 'night' => {
@@ -116,7 +117,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
 
   // Start a new shift
   const startShift = async (): Promise<boolean> => {
-    if (!profile?.branch_id || !profile?.id) {
+    if (!activeBranchId || !profile?.id) {
       console.error('No profile loaded');
       return false;
     }
@@ -124,7 +125,7 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .rpc('start_shift', {
-          p_branch_id: profile.branch_id,
+          p_branch_id: activeBranchId,
           p_cashier_id: profile.id
         });
 

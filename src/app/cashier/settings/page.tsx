@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function CashierSettingsPage() {
   const { profile, loading: authLoading } = useAuth();
   const supabase = useClerkSupabaseClient();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [branchName, setBranchName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,7 +42,7 @@ export default function CashierSettingsPage() {
   useEffect(() => {
     if (authLoading) return;
     const fetchBranchName = async () => {
-      if (!profile?.branch_id) {
+      if (!activeBranchId) {
         setLoading(false);
         return;
       }
@@ -50,7 +51,7 @@ export default function CashierSettingsPage() {
         const { data, error } = await supabase
           .from('branches')
           .select('name')
-          .eq('id', profile.branch_id)
+          .eq('id', activeBranchId)
           .single();
 
         if (error) throw error;
@@ -63,7 +64,7 @@ export default function CashierSettingsPage() {
     };
 
     fetchBranchName();
-  }, [authLoading, profile?.branch_id]);
+  }, [authLoading, activeBranchId]);
 
   // Update form data when profile loads
   useEffect(() => {
@@ -100,7 +101,7 @@ export default function CashierSettingsPage() {
 
   if (loading) {
     return (
-      <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier">
+      <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" branchName={profile?.active_branch?.name}>
         <div className="h-full flex flex-col">
           {/* Header Skeleton */}
           <div className="px-8 pt-6 pb-4 border-b">
@@ -149,7 +150,7 @@ export default function CashierSettingsPage() {
   }
 
   return (
-    <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier">
+    <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" branchName={profile?.active_branch?.name}>
       <div className="p-8">
         <div className="max-w-4xl mx-auto space-y-8">
           {/* Notification */}
@@ -207,7 +208,7 @@ export default function CashierSettingsPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Branch</label>
+                  <label className="text-sm font-medium mb-2 block">Working Branch</label>
                   <input
                     type="text"
                     value={branchName}

@@ -17,6 +17,7 @@ export function EndShiftModal({ isOpen, onClose, onShiftEnded }: EndShiftModalPr
   const { activeShift, endShift } = useShift();
   const { profile } = useAuth();
   const supabase = useClerkSupabaseClient();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [loading, setLoading] = useState(false);
   const [calculatingTotals, setCalculatingTotals] = useState(true);
@@ -27,7 +28,7 @@ export function EndShiftModal({ isOpen, onClose, onShiftEnded }: EndShiftModalPr
 
   // Fetch totals when modal opens
   useEffect(() => {
-    if (!isOpen || !activeShift || !profile?.branch_id) return;
+    if (!isOpen || !activeShift || !activeBranchId) return;
 
     const fetchTotals = async () => {
       setCalculatingTotals(true);
@@ -36,7 +37,7 @@ export function EndShiftModal({ isOpen, onClose, onShiftEnded }: EndShiftModalPr
         const { data: expensesData, error: expensesError } = await supabase
           .from('expenses')
           .select('total')
-          .eq('branch_id', profile.branch_id)
+          .eq('branch_id', activeBranchId)
           .eq('expense_date', activeShift.shift_date)
           .eq('shift', activeShift.shift_type);
 
@@ -52,7 +53,7 @@ export function EndShiftModal({ isOpen, onClose, onShiftEnded }: EndShiftModalPr
     };
 
     fetchTotals();
-  }, [isOpen, activeShift, profile?.branch_id]);
+  }, [isOpen, activeShift, activeBranchId]);
 
   if (!isOpen || !activeShift) return null;
 

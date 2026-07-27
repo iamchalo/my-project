@@ -43,6 +43,7 @@ export default function CashierSalesPage() {
   const supabase = useClerkSupabaseClient();
   const { showNotification } = useNotification();
   const { hasActiveShift, loading: shiftLoading } = useShift();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [loading, setLoading] = useState(true);
   const initialLoadDone = useRef(false);
@@ -77,16 +78,16 @@ export default function CashierSalesPage() {
 
   // Persist all form fields whenever they change (after initial load)
   useEffect(() => {
-    if (!profile?.branch_id || !initialLoadDone.current) return;
-    localStorage.setItem(getStorageKey(profile.branch_id), JSON.stringify({
+    if (!activeBranchId || !initialLoadDone.current) return;
+    localStorage.setItem(getStorageKey(activeBranchId), JSON.stringify({
       stockCounts, mpesaAmount, paybillAmount, denominations, coinsAmount,
     }));
     // Clean up old key format from previous version
     localStorage.removeItem('salesStockForm');
-  }, [stockCounts, mpesaAmount, paybillAmount, denominations, coinsAmount, profile?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stockCounts, mpesaAmount, paybillAmount, denominations, coinsAmount, activeBranchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchExpenseTotal = useCallback(async () => {
-    if (!profile?.branch_id || !profile?.id) return;
+    if (!activeBranchId || !profile?.id) return;
     try {
       const currentDate = getKenyaDateString();
       const kenyaHour = parseInt(
@@ -97,7 +98,7 @@ export default function CashierSalesPage() {
       const { data: expensesData, error } = await supabase
         .from('expenses')
         .select('total')
-        .eq('branch_id', profile.branch_id)
+        .eq('branch_id', activeBranchId)
         .eq('cashier_id', profile.id)
         .eq('expense_date', currentDate)
         .eq('shift', currentShift);
@@ -108,7 +109,7 @@ export default function CashierSalesPage() {
     } catch (error) {
       console.error('Error fetching expense total:', error);
     }
-  }, [profile?.branch_id, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeBranchId, profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchInitialData = async () => {
     const isFirstLoad = !initialLoadDone.current;
@@ -117,7 +118,7 @@ export default function CashierSalesPage() {
 
       // Fetch active products for branch
       const { data: productsData, error: productsError } = await supabase
-        .rpc('get_branch_products', { target_branch_id: profile?.branch_id });
+        .rpc('get_branch_products', { target_branch_id: activeBranchId });
       if (productsError) throw productsError;
 
       const formattedProducts: Product[] = productsData.map((p: any) => ({
@@ -128,7 +129,7 @@ export default function CashierSalesPage() {
       setProducts(formattedProducts);
 
       // Restore saved stock counts from localStorage (keyed by branch + date)
-      const storageKey = profile?.branch_id ? getStorageKey(profile.branch_id) : null;
+      const storageKey = activeBranchId ? getStorageKey(activeBranchId) : null;
       let savedStock: StockCount[] = [];
       let savedCash: { mpesaAmount?: string; paybillAmount?: string; denominations?: CashDenomination[]; coinsAmount?: string } = {};
       if (storageKey) {
@@ -158,7 +159,7 @@ export default function CashierSalesPage() {
 
       // Fetch last shift cash (balance brought down) — non-fatal if RPC missing
       const { data: lastCash, error: lastCashError } = await supabase
-        .rpc('get_last_shift_cash', { target_branch_id: profile?.branch_id });
+        .rpc('get_last_shift_cash', { target_branch_id: activeBranchId });
       if (lastCashError) {
         console.warn('get_last_shift_cash error (using 0):', lastCashError.message);
       }
@@ -169,7 +170,7 @@ export default function CashierSalesPage() {
         const { data: activeShift } = await supabase
           .from('shifts')
           .select('id')
-          .eq('branch_id', profile?.branch_id)
+          .eq('branch_id', activeBranchId)
           .eq('is_active', true)
           .maybeSingle();
         if (activeShift) setActiveShiftId(activeShift.id);
@@ -188,7 +189,7 @@ export default function CashierSalesPage() {
   };
 
   useEffect(() => {
-    if (!profile?.branch_id) {
+    if (!activeBranchId) {
       setLoading(false);
       return;
     }
@@ -200,12 +201,12 @@ export default function CashierSalesPage() {
       .channel('sales_stock_expense_changes')
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'expenses',
-        filter: `branch_id=eq.${profile.branch_id}`,
+        filter: `branch_id=eq.${activeBranchId}`,
       }, () => fetchExpenseTotal())
       .subscribe();
 
     return () => { expenseSubscription.unsubscribe(); };
-  }, [profile?.branch_id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeBranchId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateStockCount = (index: number, field: keyof StockCount, value: string) => {
     const updated = [...stockCounts];
@@ -265,7 +266,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
         .from('shifts')
         .insert({
           shift_number: shiftNumber,
-          branch_id: profile?.branch_id,
+          branch_id: activeBranchId,
           cashier_id: profile?.id,
           shift_type: shiftType,
           shift_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Nairobi' }),
@@ -336,7 +337,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
     setPaybillAmount('');
     setDenominations(DENOMINATIONS.map(d => ({ denomination: d, quantity: 0, total: 0 })));
     setCoinsAmount('');
-    if (profile?.branch_id) localStorage.removeItem(getStorageKey(profile.branch_id));
+    if (activeBranchId) localStorage.removeItem(getStorageKey(activeBranchId));
     localStorage.removeItem('salesStockForm');
   };
 
@@ -344,7 +345,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
 
   if (loading) {
     return (
-      <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" hasActiveShift={hasActiveShift} onEndShiftAndLogout={handleEndShiftAndLogout}>
+      <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" hasActiveShift={hasActiveShift} onEndShiftAndLogout={handleEndShiftAndLogout} branchName={profile?.active_branch?.name}>
         <div className="h-full flex flex-col">
           <div className="px-8 pt-6 pb-4 border-b">
             <Skeleton className="h-8 w-64 mb-2" />
@@ -372,7 +373,7 @@ const cashInHand = denominations.reduce((sum, d) => sum + d.total, 0) + parseFlo
   }
 
   return (
-    <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" hasActiveShift={hasActiveShift} onEndShiftAndLogout={handleEndShiftAndLogout}>
+    <DashboardLayout userName={profile?.full_name || 'Cashier'} userRole="cashier" hasActiveShift={hasActiveShift} onEndShiftAndLogout={handleEndShiftAndLogout} branchName={profile?.active_branch?.name}>
       <EndShiftModal
         isOpen={showEndShiftForLogout}
         onClose={() => setShowEndShiftForLogout(false)}
