@@ -32,6 +32,7 @@ export default function CashierDashboard() {
   const { profile, signOut } = useAuth();
   const { hasActiveShift, activeShift, loading: shiftLoading } = useShift();
   const supabase = useClerkSupabaseClient();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [showStartShiftModal, setShowStartShiftModal] = useState(false);
   const [showEndShiftForLogout, setShowEndShiftForLogout] = useState(false);
@@ -108,17 +109,13 @@ export default function CashierDashboard() {
 
   // Open manage modal — load all branch chefs and pre-select assigned ones
   const openManageModal = async () => {
-    if (!profile?.branch_id) return;
+    if (!activeBranchId) return;
     setModalLoading(true);
     setShowManageModal(true);
     try {
       const { data: chefData } = await supabase
-        .from('employees')
-        .select('id, full_name')
-        .eq('branch_id', profile.branch_id)
-        .eq('job_title', 'Chef')
-        .eq('is_active', true)
-        .order('full_name');
+        .rpc('get_branch_chefs', { target_branch_id: activeBranchId }) as
+        { data: { id: string; full_name: string }[] | null };
 
       const chefIds = (chefData || []).map(c => c.id);
       let busyMap: Record<string, string> = {};
@@ -161,7 +158,7 @@ export default function CashierDashboard() {
   };
 
   const handleSaveChefs = async () => {
-    if (!activeShift?.id || !profile?.id || !profile?.branch_id) return;
+    if (!activeShift?.id || !profile?.id || !activeBranchId) return;
     setSaving(true);
     try {
       // Remove deselected assignments
@@ -181,7 +178,7 @@ export default function CashierDashboard() {
           toAdd.map(empId => ({
             shift_id: activeShift.id,
             employee_id: empId,
-            branch_id: profile.branch_id,
+            branch_id: activeBranchId,
             assigned_by: profile.id,
           }))
         );
@@ -200,6 +197,7 @@ export default function CashierDashboard() {
     <DashboardLayout
       userName={profile?.full_name || 'Cashier'}
       userRole="cashier"
+      branchName={profile?.active_branch?.name}
       hasActiveShift={hasActiveShift}
       onEndShiftAndLogout={handleEndShiftAndLogout}
     >

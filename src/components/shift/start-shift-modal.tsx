@@ -23,6 +23,7 @@ export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
   const { startShift, getCurrentShiftType } = useShift();
   const { profile } = useAuth();
   const supabase = useClerkSupabaseClient();
+  const activeBranchId = profile?.active_branch_id ?? profile?.branch_id ?? null;
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +37,7 @@ export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
 
   // Fetch chefs whenever modal opens
   useEffect(() => {
-    if (!isOpen || !profile?.branch_id) return;
+    if (!isOpen || !activeBranchId) return;
     setSelectedIds(new Set());
     setError(null);
 
@@ -44,12 +45,8 @@ export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
       setChefsLoading(true);
       try {
         const { data: chefData } = await supabase
-          .from('employees')
-          .select('id, full_name')
-          .eq('branch_id', profile.branch_id)
-          .eq('job_title', 'Chef')
-          .eq('is_active', true)
-          .order('full_name');
+          .rpc('get_branch_chefs', { target_branch_id: activeBranchId }) as
+          { data: { id: string; full_name: string }[] | null };
 
         const chefIds = (chefData || []).map(c => c.id);
         let busyMap: Record<string, string> = {};
@@ -80,7 +77,7 @@ export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
     };
 
     fetchChefs();
-  }, [isOpen, profile?.branch_id]);
+  }, [isOpen, activeBranchId]);
 
   const toggleChef = (id: string) =>
     setSelectedIds(prev => {
@@ -96,12 +93,12 @@ export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
       await startShift();
 
       // Save chef assignments if any selected
-      if (selectedIds.size > 0 && profile?.id && profile?.branch_id) {
+      if (selectedIds.size > 0 && profile?.id && activeBranchId) {
         // Get the shift that was just created
         const { data: shiftData } = await supabase
           .from('shifts')
           .select('id')
-          .eq('branch_id', profile.branch_id)
+          .eq('branch_id', activeBranchId)
           .eq('is_active', true)
           .single();
 
@@ -110,7 +107,7 @@ export function StartShiftModal({ isOpen, onSuccess }: StartShiftModalProps) {
             Array.from(selectedIds).map(empId => ({
               shift_id: shiftData.id,
               employee_id: empId,
-              branch_id: profile.branch_id,
+              branch_id: activeBranchId,
               assigned_by: profile.id,
             }))
           );

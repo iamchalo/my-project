@@ -78,6 +78,7 @@ export default function SuperadminEmployeesPage() {
   const [saving, setSaving] = useState(false);
 
   const [formData, setFormData] = useState({ ...emptyForm });
+  const [additionalBranchIds, setAdditionalBranchIds] = useState<Set<string>>(new Set());
   const [showPassword, setShowPassword] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -92,6 +93,30 @@ export default function SuperadminEmployeesPage() {
   };
 
   const set = (field: string, value: any) => setFormData(prev => ({ ...prev, [field]: value }));
+
+  const renderAdditionalBranches = () => (
+    <div className="mt-3 col-span-2">
+      <label className={labelCls}>Additional Branches (optional)</label>
+      <p className="text-xs text-muted-foreground mb-2">
+        {formData.job_title === 'Chef'
+          ? 'This chef will be available for shift assignment at these branches too.'
+          : 'This cashier will pick their working branch at login when more than one is assigned.'}
+      </p>
+      <div className="border rounded-lg p-2 space-y-1 max-h-40 overflow-y-auto">
+        {branches.filter(b => b.id !== formData.branch_id).map(b => (
+          <label key={b.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={additionalBranchIds.has(b.id)}
+              onChange={() => toggleAdditionalBranch(b.id)}
+              className="h-4 w-4 rounded"
+            />
+            <span className="text-sm">{b.name}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     if (authLoading) return;
@@ -138,10 +163,18 @@ export default function SuperadminEmployeesPage() {
 
   const resetForm = () => {
     setFormData({ ...emptyForm });
+    setAdditionalBranchIds(new Set());
     setShowPassword(false);
   };
 
-  const openEdit = (record: StaffRecord) => {
+  const toggleAdditionalBranch = (id: string) =>
+    setAdditionalBranchIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const openEdit = async (record: StaffRecord) => {
     setEditingRecord(record);
     setFormData({
       full_name: record.full_name,
@@ -159,6 +192,23 @@ export default function SuperadminEmployeesPage() {
       password: '',
       is_active: record.is_active,
     });
+
+    if (record.has_pos_account && record.pos_profile_id) {
+      const { data } = await supabase
+        .from('cashier_branches')
+        .select('branch_id')
+        .eq('profile_id', record.pos_profile_id);
+      setAdditionalBranchIds(new Set((data || []).map(r => r.branch_id)));
+    } else if (record.job_title === 'Chef') {
+      const { data } = await supabase
+        .from('employee_branches')
+        .select('branch_id')
+        .eq('employee_id', record.id);
+      setAdditionalBranchIds(new Set((data || []).map(r => r.branch_id)));
+    } else {
+      setAdditionalBranchIds(new Set());
+    }
+
     setShowDeleteSection(false);
     setDeleteNameInput('');
     setShowEditModal(true);
@@ -193,9 +243,18 @@ export default function SuperadminEmployeesPage() {
           return;
         }
         posProfileId = result.userId || null;
+        const newProfileId = posProfileId;
+
+        if (newProfileId && formData.pos_role === 'cashier' && additionalBranchIds.size > 0) {
+          await supabase.from('cashier_branches').insert(
+            Array.from(additionalBranchIds)
+              .filter(id => id !== formData.branch_id)
+              .map(branchId => ({ profile_id: newProfileId, branch_id: branchId }))
+          );
+        }
       }
 
-      const { error } = await supabase.from('employees').insert({
+      const { data: newEmployee, error } = await supabase.from('employees').insert({
         full_name: formData.full_name.trim(),
         employee_id_number: formData.employee_id_number.trim() || null,
         kra_pin: formData.kra_pin.trim() || null,
@@ -209,9 +268,17 @@ export default function SuperadminEmployeesPage() {
         has_pos_account: formData.has_pos_account,
         pos_profile_id: posProfileId,
         is_active: true,
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      if (formData.job_title === 'Chef' && newEmployee?.id && additionalBranchIds.size > 0) {
+        await supabase.from('employee_branches').insert(
+          Array.from(additionalBranchIds)
+            .filter(id => id !== formData.branch_id)
+            .map(branchId => ({ employee_id: newEmployee.id, branch_id: branchId }))
+        );
+      }
 
       showNotif('success', 'Staff record created successfully');
       setShowAddModal(false);
@@ -250,15 +317,36 @@ export default function SuperadminEmployeesPage() {
 
       if (error) throw error;
 
+      // Sync additional branch assignments for chefs (employee_branches)
+      await supabase.from('employee_branches').delete().eq('employee_id', editingRecord.id);
+      if (formData.job_title === 'Chef' && additionalBranchIds.size > 0) {
+        await supabase.from('employee_branches').insert(
+          Array.from(additionalBranchIds)
+            .filter(id => id !== formData.branch_id)
+            .map(branchId => ({ employee_id: editingRecord.id, branch_id: branchId }))
+        );
+      }
+
       // Sync POS profile if applicable
       if (editingRecord.has_pos_account && editingRecord.pos_profile_id) {
+        const posProfileId = editingRecord.pos_profile_id;
         await supabase.from('profiles').update({
           full_name: formData.full_name.trim(),
           phone: formData.phone.trim() || null,
           role: formData.pos_role,
           branch_id: formData.branch_id,
           is_active: formData.is_active,
-        }).eq('id', editingRecord.pos_profile_id);
+        }).eq('id', posProfileId);
+
+        // Sync additional branch assignments (cashier_branches)
+        await supabase.from('cashier_branches').delete().eq('profile_id', posProfileId);
+        if (formData.pos_role === 'cashier' && additionalBranchIds.size > 0) {
+          await supabase.from('cashier_branches').insert(
+            Array.from(additionalBranchIds)
+              .filter(id => id !== formData.branch_id)
+              .map(branchId => ({ profile_id: posProfileId, branch_id: branchId }))
+          );
+        }
       }
 
       showNotif('success', 'Record updated successfully');
@@ -359,6 +447,7 @@ export default function SuperadminEmployeesPage() {
               </select>
             </div>
           </div>
+          {formData.job_title === 'Chef' && formData.branch_id && renderAdditionalBranches()}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Date of Reporting</label>
@@ -470,6 +559,7 @@ export default function SuperadminEmployeesPage() {
                   </button>
                 </div>
               </div>
+              {formData.pos_role === 'cashier' && renderAdditionalBranches()}
             </div>
           )}
         </div>
@@ -489,6 +579,7 @@ export default function SuperadminEmployeesPage() {
                 <option value="superadmin">Superadmin</option>
               </select>
             </div>
+            {formData.pos_role === 'cashier' && renderAdditionalBranches()}
           </div>
         </div>
       )}
