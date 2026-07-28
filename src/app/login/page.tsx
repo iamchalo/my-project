@@ -73,7 +73,7 @@ export default function LoginPage() {
       if (code === 'form_password_incorrect' || code === 'form_identifier_not_found') {
         showNotification('error', 'Invalid email or password');
       } else {
-        showNotification('error', msg);
+        showNotification('error', `${msg} [code: ${code}]`);
       }
       setIsSubmitting(false);
     }
