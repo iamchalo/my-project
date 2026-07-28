@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Notification, useNotification } from '@/components/ui/notification';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2, LogIn } from 'lucide-react';
+import { PasswordToggleButton } from '@/components/ui/password-toggle-button';
 
 function isMobileDevice(): boolean {
   if (typeof window === 'undefined') return false;
@@ -29,6 +30,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Show kicked-session message if redirected here after force sign-out
@@ -133,13 +135,16 @@ export default function LoginPage() {
             </div>
             <div>
               <label htmlFor="password" className="text-sm font-medium mb-2 block">Password</label>
-              <input
-                id="password" type="password" value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••" disabled={isSubmitting}
-                className="w-full px-4 py-2 border rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
-                autoComplete="current-password" required
-              />
+              <div className="relative">
+                <input
+                  id="password" type={showPassword ? 'text' : 'password'} value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••" disabled={isSubmitting}
+                  className="w-full px-4 py-2 pr-10 border rounded-lg disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoComplete="current-password" required
+                />
+                <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword(v => !v)} disabled={isSubmitting} />
+              </div>
             </div>
             <Button type="submit" disabled={isSubmitting} className="w-full gap-2">
               {isSubmitting ? (

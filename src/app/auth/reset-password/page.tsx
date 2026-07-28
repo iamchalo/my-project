@@ -4,7 +4,8 @@ import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, EyeIcon, EyeOffIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { PasswordToggleButton } from '@/components/ui/password-toggle-button';
 
 // ─── Inner component (uses useSearchParams — must be inside Suspense) ──────────
 
@@ -137,14 +138,7 @@ function ResetPasswordForm() {
                   className="w-full px-4 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                </button>
+                <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword(v => !v)} disabled={submitting} />
               </div>
 
               {/* Password rules */}
@@ -170,14 +164,7 @@ function ResetPasswordForm() {
                   className="w-full px-4 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirm(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showConfirm ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                </button>
+                <PasswordToggleButton visible={showConfirm} onToggle={() => setShowConfirm(v => !v)} disabled={submitting} />
               </div>
               {confirm && (
                 <p className={`text-xs mt-1 ${passwordsMatch ? 'text-green-600' : 'text-destructive'}`}>

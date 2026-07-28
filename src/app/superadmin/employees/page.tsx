@@ -9,10 +9,11 @@ import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import {
   PlusIcon, UsersIcon, Loader2Icon, XIcon, PencilIcon,
-  EyeIcon, EyeOffIcon, MonitorIcon, ChefHatIcon,
+  MonitorIcon, ChefHatIcon,
   Trash2Icon, AlertTriangleIcon,
 } from 'lucide-react';
 import { createEmployee } from '@/lib/actions/create-employee';
+import { PasswordToggleButton } from '@/components/ui/password-toggle-button';
 
 interface StaffRecord {
   id: string;
@@ -553,10 +554,11 @@ export default function SuperadminEmployeesPage() {
                     placeholder="Min 6 characters"
                     className={`${inputCls} pr-9`}
                   />
-                  <button type="button" onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                  </button>
+                  <PasswordToggleButton
+                    visible={showPassword}
+                    onToggle={() => setShowPassword(p => !p)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  />
                 </div>
               </div>
               {formData.pos_role === 'cashier' && renderAdditionalBranches()}

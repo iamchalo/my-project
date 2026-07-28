@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Notification, useNotification } from '@/components/ui/notification';
-import { Loader2, KeyRound, EyeIcon, EyeOffIcon, CheckCircle2 } from 'lucide-react';
+import { Loader2, KeyRound, CheckCircle2 } from 'lucide-react';
+import { PasswordToggleButton } from '@/components/ui/password-toggle-button';
 
 const Rule = ({ met, label }: { met: boolean; label: string }) => (
   <li className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-600' : 'text-muted-foreground'}`}>
@@ -184,14 +185,7 @@ export default function ForgotPasswordPage() {
                     className="w-full px-4 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                  </button>
+                  <PasswordToggleButton visible={showPassword} onToggle={() => setShowPassword(v => !v)} disabled={isSubmitting} />
                 </div>
                 {password && (
                   <ul className="mt-2 space-y-0.5 pl-1">
@@ -214,14 +208,7 @@ export default function ForgotPasswordPage() {
                     className="w-full px-4 py-2 border rounded-lg pr-10 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                     required
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirm(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    tabIndex={-1}
-                  >
-                    {showConfirm ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-                  </button>
+                  <PasswordToggleButton visible={showConfirm} onToggle={() => setShowConfirm(v => !v)} disabled={isSubmitting} />
                 </div>
                 {confirm && (
                   <p className={`text-xs mt-1 ${passwordsMatch ? 'text-green-600' : 'text-destructive'}`}>
