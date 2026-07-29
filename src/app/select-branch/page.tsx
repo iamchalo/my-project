@@ -22,7 +22,7 @@ const ROLE_HOME: Record<string, string> = {
 
 export default function SelectBranchPage() {
   const router = useRouter();
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, refreshProfile } = useAuth();
   const supabase = useClerkSupabaseClient();
 
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -59,6 +59,7 @@ export default function SelectBranchPage() {
         const only = data[0];
         if (only) {
           await supabase.rpc('set_active_branch', { p_branch_id: only.id });
+          await refreshProfile();
         }
         router.replace('/cashier');
         return;
@@ -70,7 +71,7 @@ export default function SelectBranchPage() {
 
     loadBranches();
     return () => { cancelled = true; };
-  }, [authLoading, profile, router, supabase]);
+  }, [authLoading, profile, router, supabase, refreshProfile]);
 
   const handleSelect = async (branchId: string) => {
     setSwitching(branchId);
@@ -81,6 +82,13 @@ export default function SelectBranchPage() {
       setSwitching(null);
       return;
     }
+    // Refresh the cached profile so active_branch_id/active_branch reflect
+    // the branch just picked — without this, profile still holds whatever
+    // was fetched at login (the home branch), and every screen that reads
+    // profile.active_branch_id/active_branch.name (cashier dashboard,
+    // sidebar, order inserts) keeps showing/using the stale branch even
+    // though the DB row was updated.
+    await refreshProfile();
     router.replace('/cashier');
   };
 

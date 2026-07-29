@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth/auth-context';
 import { useClerkSupabaseClient } from '@/lib/supabase/client';
 import { getKenyaDateString } from '@/lib/date-utils';
 import { useNotification } from '@/components/ui/notification';
-import { DollarSignIcon, TrendingDownIcon, BuildingIcon, Loader2Icon, PencilIcon, LockIcon, XIcon, SaveIcon } from 'lucide-react';
+import { DollarSignIcon, TrendingDownIcon, BuildingIcon, Loader2Icon, PencilIcon, LockIcon, XIcon, SaveIcon, Trash2Icon } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -51,6 +51,10 @@ export default function AdminExpensesPage() {
   const [editPrice, setEditPrice] = useState('');
   const [editQuantity, setEditQuantity] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Delete state
+  const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Filter state
   const [selectedDate, setSelectedDate] = useState<string>(getKenyaDateString());
@@ -253,6 +257,27 @@ export default function AdminExpensesPage() {
     }
   };
 
+  const handleDeleteExpense = async () => {
+    if (!deletingExpense) return;
+
+    try {
+      setDeleting(true);
+      const { error } = await supabase
+        .from('expenses')
+        .delete()
+        .eq('id', deletingExpense.id);
+
+      if (error) throw error;
+      showNotification('success', 'Expense deleted successfully');
+      setDeletingExpense(null);
+      await fetchExpenses();
+    } catch (error: any) {
+      showNotification('error', `Failed to delete expense: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const expenseColumns = [
     {
       key: 'index',
@@ -295,15 +320,26 @@ export default function AdminExpensesPage() {
       key: 'actions',
       label: 'Actions',
       render: (_: any, row: Expense) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => openEditModal(row)}
-          className="gap-1"
-        >
-          <PencilIcon className="h-4 w-4" />
-          Edit
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => openEditModal(row)}
+            className="gap-1"
+          >
+            <PencilIcon className="h-4 w-4" />
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeletingExpense(row)}
+            className="gap-1 text-destructive hover:text-destructive"
+          >
+            <Trash2Icon className="h-4 w-4" />
+            Delete
+          </Button>
+        </div>
       ),
     },
   ];
@@ -414,6 +450,31 @@ export default function AdminExpensesPage() {
                   <><Loader2Icon className="h-4 w-4 animate-spin" />Saving...</>
                 ) : (
                   <><SaveIcon className="h-4 w-4" />Save Changes</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Expense Confirmation Modal */}
+      {deletingExpense && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-sm mx-4 p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-destructive">Delete Expense?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete the <strong>{deletingExpense.description}</strong> expense
+              (Ksh {Number(deletingExpense.total).toFixed(2)}) for {deletingExpense.branch_name}. This cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setDeletingExpense(null)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteExpense} disabled={deleting} className="gap-2">
+                {deleting ? (
+                  <><Loader2Icon className="h-4 w-4 animate-spin" />Deleting...</>
+                ) : (
+                  <><Trash2Icon className="h-4 w-4" />Delete</>
                 )}
               </Button>
             </div>

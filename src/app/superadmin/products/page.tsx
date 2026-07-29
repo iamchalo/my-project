@@ -172,7 +172,7 @@ export default function SuperadminProductsPage() {
       // Remove all branch assignments first
       await supabase.from('branch_products').delete().eq('product_id', editingProduct.product_id);
       // Delete the product
-      const { error } = await supabase.from('products').delete().eq('product_id', editingProduct.product_id);
+      const { error } = await supabase.from('products').delete().eq('id', editingProduct.product_id);
       if (error) throw error;
       showNotification('success', 'Product deleted successfully');
       setShowDeleteConfirm(false);
