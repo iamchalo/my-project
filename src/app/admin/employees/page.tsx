@@ -25,6 +25,7 @@ interface StaffRecord {
   date_of_reporting: string | null;
   branch_id: string;
   branch_name: string;
+  branch_names: string[];
   next_of_kin_name: string | null;
   next_of_kin_phone: string | null;
   has_pos_account: boolean;
@@ -116,8 +117,49 @@ export default function AdminEmployeesPage() {
       const mapped: StaffRecord[] = (data || []).map((r: any) => ({
         ...r,
         branch_name: r.branches?.name || 'Unknown',
+        branch_names: [r.branches?.name || 'Unknown'],
         pos_role: r.profiles?.role || null,
       }));
+
+      // Merge in additional branches: cashiers (cashier_branches, keyed on pos_profile_id)
+      // and chefs (employee_branches, keyed on employee id)
+      const cashierProfileIds = mapped
+        .filter(s => s.has_pos_account && s.pos_role === 'cashier' && s.pos_profile_id)
+        .map(s => s.pos_profile_id as string);
+      const chefIds = mapped.filter(s => s.job_title === 'Chef').map(s => s.id);
+
+      const [cashierBranchesRes, employeeBranchesRes] = await Promise.all([
+        cashierProfileIds.length
+          ? supabase.from('cashier_branches').select('profile_id, branches(name)').in('profile_id', cashierProfileIds)
+          : Promise.resolve({ data: [] as any[] }),
+        chefIds.length
+          ? supabase.from('employee_branches').select('employee_id, branches(name)').in('employee_id', chefIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const cashierExtra = new Map<string, string[]>();
+      for (const row of cashierBranchesRes.data || []) {
+        const name = (row as any).branches?.name;
+        if (!name) continue;
+        const list = cashierExtra.get(row.profile_id) || [];
+        list.push(name);
+        cashierExtra.set(row.profile_id, list);
+      }
+
+      const chefExtra = new Map<string, string[]>();
+      for (const row of employeeBranchesRes.data || []) {
+        const name = (row as any).branches?.name;
+        if (!name) continue;
+        const list = chefExtra.get(row.employee_id) || [];
+        list.push(name);
+        chefExtra.set(row.employee_id, list);
+      }
+
+      for (const s of mapped) {
+        const extra = (s.pos_profile_id && cashierExtra.get(s.pos_profile_id)) || chefExtra.get(s.id);
+        if (extra?.length) s.branch_names = [s.branch_name, ...extra];
+      }
+
       setStaff(mapped);
     } catch (err) {
       console.error(err);
@@ -577,7 +619,15 @@ export default function AdminEmployeesPage() {
                         <div className={`font-medium ${sensitiveFieldCls}`}>{record.full_name}</div>
                         <div className="text-xs text-muted-foreground">{record.job_title}</div>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{record.branch_name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {record.branch_names.length > 1 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {record.branch_names.map(name => (
+                              <Badge key={name} variant="outline" className="text-xs">{name}</Badge>
+                            ))}
+                          </div>
+                        ) : record.branch_name}
+                      </td>
                       <td className="px-4 py-3">
                         {record.has_pos_account ? (
                           <Badge variant="default" className="text-xs capitalize">
