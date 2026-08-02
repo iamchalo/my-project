@@ -1,0 +1,26 @@
+// Public certificate for QZ Tray connection signing.
+// Safe to commit — pairs with the private key kept server-side only (QZ_PRIVATE_KEY env var).
+// Self-signed for internal POS use; QZ Tray will show "unverified" but the
+// "Remember this decision" checkbox becomes available once signing is wired up.
+export const QZ_CERTIFICATE = `-----BEGIN CERTIFICATE-----
+MIIDrzCCApegAwIBAgIUVSarTibnEVrll9gv15Hs32QM6gkwDQYJKoZIhvcNAQEL
+BQAwZzELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAk5BMQswCQYDVQQHDAJOQTEXMBUG
+A1UECgwObXktcHJvamVjdCBQT1MxDDAKBgNVBAsMA1BPUzEXMBUGA1UEAwwObXkt
+cHJvamVjdC1wb3MwHhcNMjYwODAyMDkxNTAwWhcNMzYwNzMwMDkxNTAwWjBnMQsw
+CQYDVQQGEwJVUzELMAkGA1UECAwCTkExCzAJBgNVBAcMAk5BMRcwFQYDVQQKDA5t
+eS1wcm9qZWN0IFBPUzEMMAoGA1UECwwDUE9TMRcwFQYDVQQDDA5teS1wcm9qZWN0
+LXBvczCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALsitnNhzz8fdeo6
+kpm2F1OW3jM/Q7pErcKa+q1HnJnpxZBKiL7GhukZag/qNS1elaNWveP4X5R7bb4S
+Cpuc6k7szYKchtoxrGkQngdQ6OJuUrqNwbRTSSgStAvMVYAdRnYYHAbBHq6o5nDH
+RTZZUi5PjN9FfvUWfv5VhNdQ9QYvpStotemjyTgm9MMVuvG0MF0SzqmpHWRZnhk0
+hbZWv6zSSWKSSVfGzIctuJeqUQlrk0WJhKfx5YsY9SwVD9NpbPmGYYAXRPura3tW
+Ji5VbYE65ctCm+ay/teedA+iWh2CzVoqzKf9/najFKfpHMTBuOH6y6LDwsjx3oI8
+q6q9bsUCAwEAAaNTMFEwHQYDVR0OBBYEFLTACDTISPdeKuZS02nNXZzaIgj4MB8G
+A1UdIwQYMBaAFLTACDTISPdeKuZS02nNXZzaIgj4MA8GA1UdEwEB/wQFMAMBAf8w
+DQYJKoZIhvcNAQELBQADggEBADvPq+iHuTzHBi1qzg3GhdyHSGCW5Q0dSpiA2MI9
+dCq91m20xa0sKMW6q+XiObTbXg5hXX5cnPcZ6GHTNXcSDeZKPGr6qQfd3uN4OQuq
+uh6V1shWsHkRc4AftQ1TA6+It7/yGEEQg8sXjGxLW1kZfixVPRPR2/V+zU4Oa/at
+LBuhkXwapxoQDzTpCyTraWr8WVqIjkRdmo4dT0Nj8A5uR7gp7rwfKlgxiW+4i2Lw
+LVfwOOSmA+50rpQtz1vr+bXgY/Fh95+wXivWtvxxQ9kIig7qTl/6kt4gW2Zr+QBQ
+rrLd9xuuIkiP/yS2dIzCy1X2WBM24JqTUY24u+BsLaHiBYA=
+-----END CERTIFICATE-----`;

@@ -1,5 +1,8 @@
 // Client-side only QZ Tray helper — never import on SSR
+import { QZ_CERTIFICATE } from './qz-certificate';
+
 let qz: any = null;
+let securityConfigured = false;
 
 async function loadQZ(): Promise<any> {
   if (qz) return qz;
@@ -12,10 +15,37 @@ async function loadQZ(): Promise<any> {
   }
 }
 
+// Signs connection requests so QZ Tray can offer "Remember this decision"
+// instead of prompting on every connect. Private key stays server-side (/api/qz/sign).
+function configureSecurity(lib: any) {
+  if (securityConfigured) return;
+  securityConfigured = true;
+
+  lib.security.setCertificatePromise((resolve: (cert: string) => void) => {
+    resolve(QZ_CERTIFICATE);
+  });
+
+  lib.security.setSignatureAlgorithm('SHA512');
+  lib.security.setSignaturePromise((toSign: string) => {
+    return (resolve: (sig: string) => void, reject: (err: unknown) => void) => {
+      fetch('/api/qz/sign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ request: toSign }),
+      })
+        .then((res) => res.json())
+        .then((data) => (data.signature ? resolve(data.signature) : reject(new Error(data.error))))
+        .catch(reject);
+    };
+  });
+}
+
 export async function connect(): Promise<boolean> {
   try {
     const lib = await loadQZ();
     if (!lib) return false;
+
+    configureSecurity(lib);
 
     if (lib.websocket.isActive()) return true;
 
