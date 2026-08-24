@@ -72,6 +72,7 @@ const navigationConfig: Record<UserRole, NavItem[]> = {
     { label: 'Logs', href: '/superadmin/logs', icon: ActivityIcon },
     { label: 'Inventory', href: '/superadmin/inventory', icon: PackageIcon },
     { label: 'Printers', href: '/superadmin/printers', icon: PrinterIcon },
+    { label: 'Security', href: '/superadmin/security', icon: ShieldIcon },
     { label: 'Settings', href: '/superadmin/settings', icon: SettingsIcon },
   ],
 };

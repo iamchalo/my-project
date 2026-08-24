@@ -35,6 +35,12 @@ interface Branch {
   name: string;
 }
 
+function getMonthEndDate(yearMonth: string): string {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  return `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
+}
+
 export default function AdminExpensesPage() {
   const { profile, loading: authLoading } = useAuth();
   const supabase = useClerkSupabaseClient();
@@ -57,7 +63,9 @@ export default function AdminExpensesPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Filter state
+  const [filterMode, setFilterMode] = useState<'day' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState<string>(getKenyaDateString());
+  const [selectedMonth, setSelectedMonth] = useState<string>(getKenyaDateString().substring(0, 7));
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedShift, setSelectedShift] = useState<'all' | 'day' | 'night'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -109,8 +117,15 @@ export default function AdminExpensesPage() {
           expense_date,
           created_at
         `)
-        .eq('expense_date', selectedDate)
         .order('created_at', { ascending: false });
+
+      if (filterMode === 'month') {
+        const monthStart = `${selectedMonth}-01`;
+        const monthEnd = getMonthEndDate(selectedMonth);
+        query = query.gte('expense_date', monthStart).lte('expense_date', monthEnd);
+      } else {
+        query = query.eq('expense_date', selectedDate);
+      }
 
       // Filter by branch if selected
       if (selectedBranch !== 'all') {
@@ -164,17 +179,21 @@ export default function AdminExpensesPage() {
       const total = expensesWithNames.reduce((sum, e) => sum + Number(e.total), 0);
       setTotalExpenses(total);
 
-      // Fetch monthly total (all branches)
-      const startOfMonth = selectedDate.substring(0, 7) + '-01';
-      const { data: monthlyData, error: monthlyError } = await supabase
-        .from('expenses')
-        .select('total')
-        .gte('expense_date', startOfMonth)
-        .lte('expense_date', selectedDate);
+      // Fetch monthly total (all branches, all shifts/categories)
+      if (filterMode === 'month') {
+        setMonthlyExpenses(total);
+      } else {
+        const startOfMonth = selectedDate.substring(0, 7) + '-01';
+        const { data: monthlyData, error: monthlyError } = await supabase
+          .from('expenses')
+          .select('total')
+          .gte('expense_date', startOfMonth)
+          .lte('expense_date', selectedDate);
 
-      if (!monthlyError && monthlyData) {
-        const monthTotal = monthlyData.reduce((sum, e) => sum + Number(e.total), 0);
-        setMonthlyExpenses(monthTotal);
+        if (!monthlyError && monthlyData) {
+          const monthTotal = monthlyData.reduce((sum, e) => sum + Number(e.total), 0);
+          setMonthlyExpenses(monthTotal);
+        }
       }
 
     } catch (error) {
@@ -186,7 +205,7 @@ export default function AdminExpensesPage() {
 
   useEffect(() => {
     if (!authLoading) fetchExpenses();
-  }, [authLoading, selectedDate, selectedBranch, selectedShift, selectedCategory]);
+  }, [authLoading, filterMode, selectedDate, selectedMonth, selectedBranch, selectedShift, selectedCategory]);
 
   // Set up real-time subscription
   useEffect(() => {
@@ -208,7 +227,7 @@ export default function AdminExpensesPage() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [selectedDate, selectedBranch, selectedShift, selectedCategory]);
+  }, [filterMode, selectedDate, selectedMonth, selectedBranch, selectedShift, selectedCategory]);
 
   const openEditModal = (expense: Expense) => {
     setEditingExpense(expense);
@@ -492,7 +511,7 @@ export default function AdminExpensesPage() {
           {/* Stats */}
           <div className="grid gap-4 md:grid-cols-3">
             <StatCard
-              title="Today's Expenses"
+              title={filterMode === 'month' ? 'Selected Month' : "Today's Expenses"}
               value={`Ksh ${totalExpenses.toLocaleString()}`}
               description={`${expenses.length} expense${expenses.length !== 1 ? 's' : ''} recorded`}
               icon={DollarSignIcon}
@@ -500,7 +519,7 @@ export default function AdminExpensesPage() {
             <StatCard
               title="This Month"
               value={`Ksh ${monthlyExpenses.toLocaleString()}`}
-              description="Month to date"
+              description={filterMode === 'month' ? 'All branches' : 'Month to date'}
               icon={TrendingDownIcon}
             />
             <StatCard
@@ -516,18 +535,50 @@ export default function AdminExpensesPage() {
             <CardHeader>
               <CardTitle>Filters</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Day / Month toggle */}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={filterMode === 'day' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterMode('day')}
+                >
+                  By Day
+                </Button>
+                <Button
+                  type="button"
+                  variant={filterMode === 'month' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilterMode('month')}
+                >
+                  By Month
+                </Button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Date Filter */}
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Date</label>
-                  <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full px-4 py-2 border rounded-lg bg-background"
-                  />
-                </div>
+                {/* Date / Month Filter */}
+                {filterMode === 'day' ? (
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Date</label>
+                    <input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg bg-background"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Month</label>
+                    <input
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="w-full px-4 py-2 border rounded-lg bg-background"
+                    />
+                  </div>
+                )}
 
                 {/* Branch Filter */}
                 <div>
