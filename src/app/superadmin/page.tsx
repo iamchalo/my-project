@@ -20,6 +20,8 @@ import {
   CreditCardIcon,
   BanknoteIcon,
   CrownIcon,
+  UserIcon,
+  ChefHatIcon,
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -44,6 +46,7 @@ interface DashboardStats {
   managers: number;
   admins: number;
   superadmins: number;
+  chefs: number;
 }
 
 interface DailySales {
@@ -59,6 +62,15 @@ interface BranchSalesPoint {
 }
 
 interface Branch { id: string; name: string; code: string; }
+
+interface LiveBranch {
+  branchId: string;
+  branchName: string;
+  cashierName: string;
+  shiftType: 'day' | 'night';
+  startedAt: string;
+  chefNames: string[];
+}
 
 // ─── Branch colours ───────────────────────────────────────────────────────────
 
@@ -128,6 +140,7 @@ export default function SuperadminDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [dailySales, setDailySales] = useState<DailySales[]>([]);
+  const [liveBranches, setLiveBranches] = useState<LiveBranch[]>([]);
 
   // Chart state
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -155,6 +168,7 @@ export default function SuperadminDashboard() {
         branchesResult,
         expensesResult,
         dailySalesResult,
+        chefsResult,
       ] = await Promise.all([
         supabase.from('orders').select('total_amount, payment_method').gte('created_at', thirtyDaysAgo),
         supabase.from('orders').select('total_amount, payment_method').gte('created_at', `${today}T00:00:00`),
@@ -162,6 +176,7 @@ export default function SuperadminDashboard() {
         supabase.from('branches').select('id, is_active, name, code'),
         supabase.from('expenses').select('total').gte('created_at', thirtyDaysAgo),
         supabase.from('orders').select('created_at, total_amount').gte('created_at', getDateRange(7).start).order('created_at', { ascending: true }),
+        supabase.from('employees').select('id').eq('job_title', 'Chef'),
       ]);
 
       // Log any RLS/query errors to help diagnose 0s on the dashboard
@@ -171,12 +186,14 @@ export default function SuperadminDashboard() {
       if (branchesResult.error)  console.error('[dashboard] branches error:', branchesResult.error);
       if (expensesResult.error)  console.error('[dashboard] expenses error:', expensesResult.error);
       if (dailySalesResult.error) console.error('[dashboard] dailySales error:', dailySalesResult.error);
+      if (chefsResult.error)     console.error('[dashboard] chefs error:', chefsResult.error);
 
       const orders = ordersResult.data || [];
       const todayOrders = todayOrdersResult.data || [];
       const profiles = profilesResult.data || [];
       const branchList = branchesResult.data || [];
       const expenses = expensesResult.data || [];
+      const chefs = chefsResult.data || [];
 
       setStats({
         totalRevenue:    orders.reduce((s, o) => s + (o.total_amount || 0), 0),
@@ -194,6 +211,7 @@ export default function SuperadminDashboard() {
         managers:        profiles.filter(p => p.role === 'manager').length,
         admins:          profiles.filter(p => p.role === 'admin').length,
         superadmins:     profiles.filter(p => p.role === 'superadmin').length,
+        chefs:           chefs.length,
       });
 
       const salesByDay: Record<string, { total: number; orders: number }> = {};
@@ -209,6 +227,50 @@ export default function SuperadminDashboard() {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Which branches currently have an open (active) shift, plus the cashier
+  // running it and any chefs assigned to it — i.e. who's actually on duty right now.
+  const fetchLiveBranches = async () => {
+    try {
+      // A shift is only "real" (currently on duty) if it started recently —
+      // day/night shifts run ~12h, so anything older than that is a stale
+      // is_active=true row from a cashier who never closed out.
+      const liveCutoff = new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString();
+
+      const { data: shifts, error } = await supabase
+        .from('shifts')
+        .select('id, branch_id, shift_type, started_at, branches(name), profiles!cashier_id(full_name)')
+        .eq('is_active', true)
+        .gte('started_at', liveCutoff);
+
+      if (error) throw error;
+
+      const shiftIds = (shifts || []).map((s: any) => s.id);
+      const { data: chefRows } = shiftIds.length
+        ? await supabase.from('shift_chef_assignments').select('shift_id, employees(full_name)').in('shift_id', shiftIds)
+        : { data: [] as any[] };
+
+      const chefMap = new Map<string, string[]>();
+      (chefRows || []).forEach((r: any) => {
+        const name = r.employees?.full_name;
+        if (!name) return;
+        const list = chefMap.get(r.shift_id) || [];
+        list.push(name);
+        chefMap.set(r.shift_id, list);
+      });
+
+      setLiveBranches((shifts || []).map((s: any) => ({
+        branchId: s.branch_id,
+        branchName: s.branches?.name || 'Unknown',
+        cashierName: s.profiles?.full_name || 'Unknown',
+        shiftType: s.shift_type,
+        startedAt: s.started_at,
+        chefNames: chefMap.get(s.id) || [],
+      })));
+    } catch (error) {
+      console.error('[dashboard] liveBranches error:', error);
     }
   };
 
@@ -279,7 +341,7 @@ export default function SuperadminDashboard() {
   };
 
   const handleRefresh = async () => {
-    await Promise.all([fetchDashboardData(), fetchChartData(range)]);
+    await Promise.all([fetchDashboardData(), fetchChartData(range), fetchLiveBranches()]);
   };
 
   const handleRangeChange = (r: '7d' | '30d' | '90d') => {
@@ -291,7 +353,22 @@ export default function SuperadminDashboard() {
     if (!authLoading) {
       fetchDashboardData();
       fetchChartData('30d');
+      fetchLiveBranches();
     }
+  }, [authLoading]);
+
+  // Keep the live-branches card fresh as shifts start/end and chefs are assigned
+  useEffect(() => {
+    if (authLoading) return;
+    const channel = supabase
+      .channel('superadmin_live_branches')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, () => fetchLiveBranches())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_chef_assignments' }, () => fetchLiveBranches())
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   }, [authLoading]);
 
   const formatCurrency = (amount: number) =>
@@ -445,6 +522,43 @@ export default function SuperadminDashboard() {
             </Card>
           </div>
 
+          {/* Live Branches — only shown when at least one branch has an open shift */}
+          {liveBranches.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                </span>
+                <h2 className="text-lg font-semibold">Live Branches</h2>
+              </div>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {liveBranches.map((b) => (
+                  <Card key={b.branchId} className="min-w-[220px] shrink-0">
+                    <CardContent className="p-4 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold truncate">{b.branchName}</p>
+                        <Badge variant={b.shiftType === 'day' ? 'secondary' : 'default'}>
+                          {b.shiftType === 'day' ? 'Day' : 'Night'}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <UserIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{b.cashierName}</span>
+                      </div>
+                      <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                        <ChefHatIcon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">
+                          {b.chefNames.length ? b.chefNames.join(', ') : 'No chef assigned'}
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Charts Row */}
           <div className="grid gap-6 lg:grid-cols-3">
             {/* Daily Sales Chart */}
@@ -501,11 +615,13 @@ export default function SuperadminDashboard() {
                 <div className="space-y-4">
                   {[
                     { role: 'Cashiers',   count: stats?.cashiers || 0,    color: 'bg-blue-500' },
+                    { role: 'Chefs',      count: stats?.chefs || 0,       color: 'bg-purple-500' },
                     { role: 'Managers',   count: stats?.managers || 0,    color: 'bg-green-500' },
                     { role: 'Admins',     count: stats?.admins || 0,      color: 'bg-amber-500' },
                     { role: 'Superadmins',count: stats?.superadmins || 0, color: 'bg-red-500' },
                   ].map((item) => {
-                    const percentage = stats?.totalEmployees ? (item.count / stats.totalEmployees) * 100 : 0;
+                    const distributionTotal = (stats?.totalEmployees || 0) + (stats?.chefs || 0);
+                    const percentage = distributionTotal ? (item.count / distributionTotal) * 100 : 0;
                     return (
                       <div key={item.role}>
                         <div className="flex justify-between text-sm mb-1">
