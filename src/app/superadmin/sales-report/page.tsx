@@ -17,7 +17,7 @@ interface Branch {
 interface Cashier {
   id: string;
   full_name: string;
-  branch_id: string;
+  branch_id?: string; // optional — a cashier can serve multiple branches now
 }
 
 interface SalesRow {
@@ -75,6 +75,7 @@ export default function SuperadminSalesReportPage() {
     setMonthFilter(today.slice(0, 7));
   }, []);
 
+  // Fetch branches
   useEffect(() => {
     if (authLoading) return;
     supabase
@@ -83,27 +84,68 @@ export default function SuperadminSalesReportPage() {
       .eq('is_active', true)
       .order('name')
       .then(({ data }) => setBranches(data || []));
-  }, [authLoading]);
+  }, [authLoading, supabase]);
 
+  // Fetch cashiers — now reads from cashier_branches so cashiers assigned to
+  // multiple branches (e.g. Clem, Purie, Rosy) show up under every branch they serve.
   useEffect(() => {
     if (authLoading) return;
-    let query = supabase
-      .from('profiles')
-      .select('id, full_name, branch_id')
-      .eq('role', 'cashier')
-      .eq('is_active', true)
-      .order('full_name');
-    if (branchFilter) {
-      query = query.eq('branch_id', branchFilter);
-    }
-    query.then(({ data }) => {
-      setCashiers(data || []);
-      if (cashierFilter && branchFilter) {
-        const still = (data || []).find((c) => c.id === cashierFilter);
-        if (!still) setCashierFilter('');
+
+    const fetchCashiers = async () => {
+      let query = supabase
+        .from('cashier_branches')
+        .select(`
+          profile_id,
+          profiles:profile_id ( id, full_name, role, is_active )
+        `);
+
+      if (branchFilter) {
+        query = query.eq('branch_id', branchFilter);
       }
-    });
-  }, [authLoading, branchFilter]);
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching cashiers:', error);
+        setCashiers([]);
+        return;
+      }
+
+      // Deduplicate — same cashier can appear once per branch when
+      // "All Branches" is selected (e.g. Clem appears twice if he serves
+      // BeFries and StageBeFries).
+      const unique = new Map<string, Cashier>();
+      for (const row of data || []) {
+        const p = row.profiles as unknown as {
+          id: string;
+          full_name: string;
+          role: string;
+          is_active: boolean;
+        } | null;
+        if (!p || p.role !== 'cashier' || !p.is_active) continue;
+        if (!unique.has(p.id)) {
+          unique.set(p.id, {
+            id: p.id,
+            full_name: p.full_name,
+            branch_id: branchFilter || undefined,
+          });
+        }
+      }
+
+      const list = Array.from(unique.values()).sort((a, b) =>
+        a.full_name.localeCompare(b.full_name)
+      );
+
+      setCashiers(list);
+
+      // If the previously selected cashier isn't valid for the new branch, reset
+      if (cashierFilter && !list.find((c) => c.id === cashierFilter)) {
+        setCashierFilter('');
+      }
+    };
+
+    fetchCashiers();
+  }, [authLoading, branchFilter, cashierFilter, supabase]);
 
   const fetchData = useCallback(async () => {
     let startDate: string;

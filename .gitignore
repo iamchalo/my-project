@@ -39,3 +39,38 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Secrets & certs
+certs/
+*.pem
+*.key
+*.crt
+*.p12
+
+# Dangerous / temp SQL
+temp-*.sql
+test-disable-rls.sql
+temp-disable-all-rls.sql
+
+# AI tooling
+.claude/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
